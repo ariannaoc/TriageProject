@@ -3,7 +3,7 @@
 
 using namespace Designar;
 
-int main() {
+int test() {
     AVLTree<int_t> arbolPrueba;
     arbolPrueba.insert(10);
     arbolPrueba.insert(5);
