@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS patients (
     triage_level INTEGER NULL,
     triage_score INTEGER NULL,
     source TEXT NOT NULL CHECK(source IN ('SYSTEM', 'MANUAL')),
-    status TEXT NOT NULL CHECK(status IN ('IN_TRANSIT', 'ADMITTED', 'DISCHARGED')),
+    status TEXT NOT NULL CHECK(status IN ('ADMITTED', 'DISCHARGED')),
     admission_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     discharge_date DATETIME NULL,
     symptoms TEXT NULL,
