@@ -1,0 +1,10 @@
+# Ignorar bases de datos locales binarias
+*.db
+*.sqlite
+*.sqlite3
+
+
+build/
+*.o
+*.out
+*Notes.MD
