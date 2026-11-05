@@ -15,15 +15,22 @@ find_package(Designar REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 
 include_directories(include)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
 # Archivos ejecutables y fuentes del proyecto
 add_executable(TriageProject
     src/main.cpp
     src/MainWindow.cpp
     src/LoginWidget.cpp
+    src/VistaMain.cpp
+    src/VistaMain.ui
     include/MainWindow.hpp
     include/LoginWidget.hpp
+    include/VistaMain.hpp
     include/ModelosCentro.hpp
+    recursos.qrc
 )
 
 # Enlazar las dependencias al ejecutable

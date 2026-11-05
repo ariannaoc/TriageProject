@@ -1,3 +1,4 @@
+#include "VistaMain.hpp"
 #include "MainWindow.hpp"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -59,54 +60,19 @@ void MainWindow::precargarCentrosMerida() {
 }
 
 void MainWindow::configurarVistaMain() {
-    vistaMain = new QWidget(this);
-    auto* layout = new QVBoxLayout(vistaMain);
-    layout->setContentsMargins(70, 50, 70, 50);
-    layout->setSpacing(20);
 
-    auto* lblTitulo = new QLabel("Sistema de Triaje Automático\ny Derivación Distribuida", this);
-    lblTitulo->setAlignment(Qt::AlignCenter);
-    lblTitulo->setStyleSheet("font-size: 26px; font-weight: bold; color: #1b263b;");
+auto* v = new VistaMain(this);
+  vistaMain = v;
 
-    auto* lblSub = new QLabel("Red Asistencial de la Ciudad de Mérida (Normativa MPPS)\nSeleccione su rol para continuar:", this);
-    lblSub->setAlignment(Qt::AlignCenter);
-    lblSub->setStyleSheet("font-size: 14px; color: #555;");
-
-    // Botón Rol 1: Reportar una emergencia (Paciente) - Público por defecto
-    auto* btnPaciente = new QPushButton("🚨  Reportar una emergencia (Paciente)", this);
-    btnPaciente->setMinimumHeight(70);
-    btnPaciente->setCursor(Qt::PointingHandCursor);
-    btnPaciente->setStyleSheet(
-        "QPushButton { font-size: 18px; font-weight: bold; background-color: #d32f2f; color: white; border-radius: 10px; }"
-        "QPushButton:hover { background-color: #b71c1c; }"
-    );
-
-    // Botón Rol 2: Centro de Salud - Privado (Requiere Login)
-    auto* btnCentro = new QPushButton("🏥  Centro de Salud (Acceso Privado / Login)", this);
-    btnCentro->setMinimumHeight(60);
-    btnCentro->setCursor(Qt::PointingHandCursor);
-    btnCentro->setStyleSheet(
-        "QPushButton { font-size: 16px; font-weight: bold; background-color: #1976d2; color: white; border-radius: 10px; }"
-        "QPushButton:hover { background-color: #0d47a1; }"
-    );
-
-    layout->addStretch();
-    layout->addWidget(lblTitulo);
-    layout->addWidget(lblSub);
-    layout->addSpacing(15);
-    layout->addWidget(btnPaciente);
-    layout->addWidget(btnCentro);
-    layout->addStretch();
-
-    connect(btnPaciente, &QPushButton::clicked, this, [this]() {
+    connect(v, &VistaMain::pacienteClicked, this, [this]() {
         pilaVistas->setCurrentWidget(vistaModuloPaciente);
     });
-
-    connect(btnCentro, &QPushButton::clicked, this, [this]() {
+    connect(v, &VistaMain::centroClicked, this, [this]() {
         pilaVistas->setCurrentWidget(vistaLoginCentro);
     });
 
     pilaVistas->addWidget(vistaMain);
+
 }
 
 void MainWindow::configurarVistaPacientePlaceholder() {
