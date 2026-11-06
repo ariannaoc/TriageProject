@@ -19,11 +19,11 @@ void LoginWidget::configurarUI() {
     // Encabezado
     auto* titulo = new QLabel("Módulo Centro de Salud — Autenticación", this);
     titulo->setAlignment(Qt::AlignCenter);
-    titulo->setStyleSheet("font-size: 22px; font-weight: bold; color: #1565c0;");
+    titulo->setStyleSheet("font-size: 22px; font-weight: bold; color: #64B5F6;");
 
     auto* subtitulo = new QLabel("Acceso exclusivo para personal autorizado de la Red Asistencial de Mérida", this);
     subtitulo->setAlignment(Qt::AlignCenter);
-    subtitulo->setStyleSheet("font-size: 13px; color: #555;");
+    subtitulo->setStyleSheet("font-size: 13px; color: #ffffff;");
 
     pestanasAuth = new QTabWidget(this);
 
@@ -48,8 +48,8 @@ void LoginWidget::configurarUI() {
     btnEntrar->setMinimumHeight(42);
     btnEntrar->setStyleSheet("background-color: #1976d2; color: white; font-weight: bold; border-radius: 6px;");
 
-    auto* notaPrueba = new QLabel("💡 Usuario de prueba precargado: <b>iahula</b> | Contraseña: <b>1234</b>", this);
-    notaPrueba->setStyleSheet("color: #666; font-size: 12px;");
+    auto* notaPrueba = new QLabel("Usuario de prueba precargado: <b>iahula</b> | Contraseña: <b>1234</b>", this);
+    notaPrueba->setStyleSheet("color: #ffffff; font-size: 12px;");
 
     layoutLogin->addSpacing(15);
     layoutLogin->addLayout(formLogin);
@@ -100,8 +100,11 @@ void LoginWidget::configurarUI() {
     layoutReg->addWidget(btnRegistrar);
     layoutReg->addStretch();
 
-    pestanasAuth->addTab(tabLogin, "🔑 Iniciar Sesión");
-    pestanasAuth->addTab(tabRegistro, "🏥 Registrar Centro");
+    pestanasAuth->addTab(tabLogin, QIcon(":/resources/usuario.png"), "Iniciar Sesión");
+    pestanasAuth->addTab(tabRegistro, QIcon(":/resources/centro_salud.png"), "Registrar Centro");
+    pestanasAuth->setIconSize(QSize(20, 20));
+
+   
 
     // Botón para volver a la ventana Main
     auto* btnVolver = new QPushButton("⬅ Volver al Menú Principal (Main)", this);
@@ -116,6 +119,17 @@ void LoginWidget::configurarUI() {
     connect(btnEntrar, &QPushButton::clicked, this, &LoginWidget::procesarLogin);
     connect(btnRegistrar, &QPushButton::clicked, this, &LoginWidget::procesarRegistro);
     connect(btnVolver, &QPushButton::clicked, this, &LoginWidget::volverAlMain);
+
+        setObjectName("LoginWidget");
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet(
+        "QWidget#LoginWidget { background-color: #313131; }"
+        "QLabel { color: #ffffff; background: transparent; }"
+        "QTabWidget::pane { background-color: #3a3a3a; border: 1px solid #555; }"
+        "QTabBar::tab { background: #3a3a3a; color: #ffffff; padding: 8px 16px; }"
+        "QTabBar::tab:selected { background: #1976d2; font-weight: bold; }"
+        "QLineEdit { background-color: #ffffff; color: #1b263b; border: 1px solid #aaa; border-radius: 4px; padding: 4px; }"
+    );
 }
 
 void LoginWidget::procesarLogin() {
