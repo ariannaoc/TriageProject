@@ -4,11 +4,32 @@ project(TriageProject LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Encontrar DeSiGNAR instalado globalmente en el sistema
+find_package(Qt6 COMPONENTS Widgets REQUIRED)
+find_package(SQLite3 REQUIRED)
 find_package(Designar REQUIRED)
 
-# Archivo ejecutable principal de tu sistema de triaje
-add_executable(TriageProject src/main.cpp)
+# libbcrypt (clona el repo y añádelo como subdirectorio o instálalo)
+# Opción A: FetchContent
+include(FetchContent)
+FetchContent_Declare(
+    bcrypt
+    GIT_REPOSITORY https://github.com/trusch/libbcrypt.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(bcrypt)
 
-# Enlazar la biblioteca DeSiGNAR
-target_link_libraries(TriageProject PRIVATE Designar::Designar)
+add_executable(TriageProject
+    src/main.cpp
+    src/mainwindow.cpp
+    src/loginwindow.cpp
+    src/database.cpp
+)
+
+target_link_libraries(TriageProject PRIVATE
+    Qt6::Widgets
+    SQLite::SQLite3
+    Designar::Designar
+    bcrypt
+)
+
+target_include_directories(TriageProject PRIVATE src)
