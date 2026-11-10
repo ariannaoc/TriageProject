@@ -20,7 +20,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # Archivos ejecutables y fuentes del proyecto
-add_executable(TriageProject
+qt_add_executable(TriageProject
     src/main.cpp
     src/MainWindow.cpp
     src/LoginWidget.cpp

@@ -5,6 +5,7 @@
 
 
 build/
+build_android/
 *.o
 *.out
 *Notes.MDcompile_commands.json
