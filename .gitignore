@@ -1,10 +1,17 @@
-# Ignorar bases de datos locales binarias
+# Bases de datos locales binarias
 *.db
 *.sqlite
 *.sqlite3
 
 
+# Compilación CMake / Qt
 build/
+build_android/
 *.o
 *.out
-*Notes.MD
+*.user
+compile_commands.json
+
+#Notas locales
+*Notes.MDtest_motores_demo
+demo_output.txt
