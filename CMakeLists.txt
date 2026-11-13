@@ -23,9 +23,13 @@ set(CMAKE_AUTORCC ON)
 qt_add_executable(TriageProject
     src/BosqueTriaje.cpp
     src/MotorTriaje.cpp
+    src/GestorCentros.cpp
+    src/MotorEnrutamiento.cpp
     include/modelos_triaje.hpp
     include/BosqueTriaje.hpp
     include/MotorTriaje.hpp
+    include/GestorCentros.hpp
+    include/MotorEnrutamiento.hpp
     src/main.cpp
     src/MainWindow.cpp
     src/LoginWidget.cpp
