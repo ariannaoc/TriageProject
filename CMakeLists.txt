@@ -21,6 +21,11 @@ set(CMAKE_AUTORCC ON)
 
 # Archivos ejecutables y fuentes del proyecto
 qt_add_executable(TriageProject
+    src/BosqueTriaje.cpp
+    src/MotorTriaje.cpp
+    include/modelos_triaje.hpp
+    include/BosqueTriaje.hpp
+    include/MotorTriaje.hpp
     src/main.cpp
     src/MainWindow.cpp
     src/LoginWidget.cpp
@@ -39,3 +44,4 @@ target_link_libraries(TriageProject PRIVATE
     Qt6::Widgets
     Qt6::Sql
 )
+
