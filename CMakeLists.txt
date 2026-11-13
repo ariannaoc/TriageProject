@@ -49,3 +49,12 @@ target_link_libraries(TriageProject PRIVATE
     Qt6::Sql
 )
 
+# Target de pruebas del motor de triaje y enrutamiento (sin Qt)
+add_executable(test_motores
+    tests/test_motores.cpp
+    src/BosqueTriaje.cpp
+    src/MotorTriaje.cpp
+    src/GestorCentros.cpp
+    src/MotorEnrutamiento.cpp
+)
+target_link_libraries(test_motores PRIVATE Designar::Designar)
