@@ -13,4 +13,5 @@ build_android/
 compile_commands.json
 
 #Notas locales
-*Notes.MD
+*Notes.MDtest_motores_demo
+demo_output.txt

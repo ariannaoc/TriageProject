@@ -246,6 +246,9 @@ void testEnrutamientoPesoCapacidad(const GestorCentros& gestor)
 
 void testEnrutamientoComplejidadInsuficiente(const GestorCentros& gestor)
 {
+    // Este test usa su propio gestor reducido; el parámetro se mantiene por
+    // simetría con el resto de tests. Cast a void para silenciar -Wunused-parameter.
+    (void)gestor;
     // Nivel I con un gestor que solo tiene centros de complejidad < 4
     std::vector<CentroSalud> pocos = {
         {10, "amb", "Ambulatorio", 1, 20, 10, 2, 8.600, -71.100}
