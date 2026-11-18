@@ -76,25 +76,13 @@ auto* v = new VistaMain(this);
 }
 
 void MainWindow::configurarVistaPacientePlaceholder() {
-    vistaModuloPaciente = new QWidget(this);
-    auto* layout = new QVBoxLayout(vistaModuloPaciente);
-    layout->setContentsMargins(50, 40, 50, 40);
-
-    auto* lbl = new QLabel("Módulo Paciente (Público)\nVista 1: Formulario Dinámico - Árbol de Decisiones", this);
-    lbl->setAlignment(Qt::AlignCenter);
-    lbl->setStyleSheet("font-size: 20px; font-weight: bold;");
-
-    auto* btnVolver = new QPushButton("⬅ Volver a Main", this);
-    btnVolver->setMinimumHeight(40);
-    connect(btnVolver, &QPushButton::clicked, this, [this]() {
+    // Instanciamos el formulario real en lugar del placeholder
+    vistaModuloPaciente = new FormularioPacienteWidget(this);
+    
+    // Conectamos el botón volver del formulario con la pantalla principal
+    connect(vistaModuloPaciente, &FormularioPacienteWidget::volverAlMain, this, [this]() {
         pilaVistas->setCurrentWidget(vistaMain);
     });
-
-    layout->addStretch();
-    layout->addWidget(lbl);
-    layout->addSpacing(20);
-    layout->addWidget(btnVolver);
-    layout->addStretch();
 
     pilaVistas->addWidget(vistaModuloPaciente);
 }
