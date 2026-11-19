@@ -4,6 +4,7 @@
 #include <QLabel>
 #include "ModelosCentro.hpp"
 #include "LoginWidget.hpp"
+#include "FormularioPacienteWidget.hpp"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -13,7 +14,7 @@ private:
 
     // Vistas del sistema
     QWidget* vistaMain;
-    QWidget* vistaModuloPaciente;
+    FormularioPacienteWidget* vistaModuloPaciente;
     LoginWidget* vistaLoginCentro;
     QWidget* vistaDashboardCentro;
 
