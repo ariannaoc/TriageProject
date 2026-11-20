@@ -18,3 +18,14 @@ VALUES
     ('Ambulatorio Urbano Tipo I La Mara', 'Ambulatorio Urbano Tipo I', 4, 5, 'Calle 1 Guaicaipuro, Urb. La Mara, Parroquia Juan Rodríguez Suárez, Mérida', 8.5620, -71.1850),
     ('Ambulatorio Urbano Tipo I Arquidiócesano', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector Belén / Centro, Calle 17 entre Av. 2 y 3, Parroquia Arias, Mérida', 8.6015, -71.1410),
     ('Ambulatorio Urbano Tipo I La Carabobo', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector Cuenca del Chama, Barrio Carabobo, Parroquia Jacinto Plaza, Mérida', 8.5695, -71.1480);
+
+-- Limpiar usuarios previos de prueba
+DELETE FROM users;
+DELETE FROM sqlite_sequence WHERE name='users';
+
+INSERT INTO users (center_id, username, password_hash)
+VALUES 
+--   iahula_admin   -> admin123
+    (1, 'iahula_admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'),
+--   sorjuana_admin -> 123456
+    (2, 'sorjuana_admin', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92');
