@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <mutex>
 #include <string>
+#include <filesystem>
+#include <cstdlib>
 #include <sqlite3.h>
 #include <openssl/sha.h>
 
@@ -11,12 +13,171 @@
 #include "libs/json.hpp"
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
-const std::string DB_PATH = "data/triage.db";
-const std::string TEMP_JSON_PATH = "data/temp_patients.json";
+std::string DB_PATH;
+std::string TEMP_JSON_PATH;
 
 std::mutex json_mutex;
 std::mutex db_mutex;
+
+namespace {
+
+std::string variableEntorno(const char* nombre) {
+    const char* valor = std::getenv(nombre);
+    return valor != nullptr && *valor != '\0' ? std::string(valor) : std::string();
+}
+
+fs::path rutaAbsoluta(const fs::path& ruta) {
+    std::error_code error;
+    const fs::path resultado = fs::absolute(ruta, error);
+    return error ? ruta : resultado;
+}
+
+fs::path directorioEjecutable(const char* argv0) {
+    std::error_code error;
+#if defined(__linux__)
+    const fs::path desdeProc = fs::canonical("/proc/self/exe", error);
+    if (!error && !desdeProc.empty()) {
+        return desdeProc.parent_path();
+    }
+    error.clear();
+#endif
+    const fs::path desdeArgv = fs::canonical(argv0, error);
+    if (!error && !desdeArgv.empty()) {
+        return desdeArgv.parent_path();
+    }
+    error.clear();
+    const fs::path absoluta = fs::absolute(argv0, error);
+    if (!error && !absoluta.empty()) {
+        return absoluta.parent_path();
+    }
+    return fs::current_path();
+}
+
+fs::path raizProyecto(const fs::path& directorio) {
+    fs::path actual = directorio;
+    for (int nivel = 0; nivel < 3; ++nivel) {
+        if (fs::is_directory(actual / "data")) {
+            return actual;
+        }
+        const fs::path padre = actual.parent_path();
+        if (padre.empty() || padre == actual) {
+            break;
+        }
+        actual = padre;
+    }
+    return directorio;
+}
+
+fs::path buscarScript(const fs::path& directorioDatos, const fs::path& raiz, const char* nombre) {
+    const fs::path candidatos[] = {
+        directorioDatos / nombre,
+        directorioDatos.parent_path() / "scripts" / nombre,
+        raiz / "scripts" / nombre,
+        raiz / "data" / nombre
+    };
+    for (const fs::path& candidato : candidatos) {
+        if (fs::is_regular_file(candidato)) {
+            return candidato;
+        }
+    }
+    return {};
+}
+
+bool hayTablas(sqlite3* db) {
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('centers', 'users', 'patients');";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+    int encontradas = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        ++encontradas;
+    }
+    sqlite3_finalize(stmt);
+    return encontradas == 3;
+}
+
+int contarCentros(sqlite3* db) {
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM centers;", -1, &stmt, nullptr) != SQLITE_OK) {
+        return -1;
+    }
+    int total = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        total = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return total;
+}
+
+bool ejecutarSql(sqlite3* db, const fs::path& archivo, std::string& mensajeError) {
+    std::ifstream entrada(archivo);
+    if (!entrada.is_open()) {
+        mensajeError = "No se pudo leer " + archivo.string();
+        return false;
+    }
+    std::ostringstream contenido;
+    contenido << entrada.rdbuf();
+    char* error = nullptr;
+    const int codigo = sqlite3_exec(db, contenido.str().c_str(), nullptr, nullptr, &error);
+    if (codigo != SQLITE_OK) {
+        mensajeError = error != nullptr ? error : sqlite3_errmsg(db);
+        sqlite3_free(error);
+        return false;
+    }
+    return true;
+}
+
+bool inicializarBase(const fs::path& rutaDb, const fs::path& directorioDatos, const fs::path& raiz) {
+    std::cout << "Base de datos Triage: " << rutaAbsoluta(rutaDb).string() << std::endl;
+
+    std::error_code error;
+    fs::create_directories(rutaDb.parent_path(), error);
+    if (error) {
+        std::cerr << "No se pudo crear el directorio de datos: " << error.message() << std::endl;
+        return false;
+    }
+
+    sqlite3* db = nullptr;
+    if (sqlite3_open(rutaDb.c_str(), &db) != SQLITE_OK) {
+        std::cerr << "No se pudo abrir la base de datos: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    if (!hayTablas(db)) {
+        const fs::path script = buscarScript(directorioDatos, raiz, "database_setup.sql");
+        if (script.empty()) {
+            std::cerr << "No se encontró database_setup.sql para inicializar el esquema." << std::endl;
+            sqlite3_close(db);
+            return false;
+        }
+        std::string mensajeError;
+        if (!ejecutarSql(db, script, mensajeError)) {
+            std::cerr << "Error al aplicar " << script.string() << ": " << mensajeError << std::endl;
+            sqlite3_close(db);
+            return false;
+        }
+        std::cout << "Esquema inicializado desde " << script.string() << std::endl;
+    }
+
+    if (contarCentros(db) == 0) {
+        const fs::path semilla = buscarScript(directorioDatos, raiz, "seed.sql");
+        std::string mensajeError;
+        if (!semilla.empty() && ejecutarSql(db, semilla, mensajeError)) {
+            std::cout << "Datos de prueba cargados desde " << semilla.string() << std::endl;
+        } else if (!semilla.empty()) {
+            std::cerr << "Error al cargar " << semilla.string() << ": " << mensajeError << std::endl;
+        }
+    }
+
+    sqlite3_close(db);
+    return true;
+}
+
+}
 
 // Generar hash SHA-256 de una cadena usando OpenSSL
 std::string sha256(const std::string &input)
@@ -50,14 +211,36 @@ void writeTempPatients(const json &j)
     file << j.dump(2);
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+    const fs::path raiz = raizProyecto(directorioEjecutable(argc > 0 ? argv[0] : ""));
+    fs::path directorioDatos = raiz / "data";
+    const std::string dbEntorno = variableEntorno("TRIAGE_DB_PATH");
+    const std::string datosEntorno = variableEntorno("TRIAGE_DATA_DIR");
+
+    if (!dbEntorno.empty()) {
+        const fs::path rutaDb = rutaAbsoluta(dbEntorno);
+        DB_PATH = rutaDb.string();
+        directorioDatos = rutaDb.parent_path();
+    } else {
+        if (!datosEntorno.empty()) {
+            directorioDatos = rutaAbsoluta(datosEntorno);
+        }
+        DB_PATH = (directorioDatos / "triage.db").string();
+    }
+    TEMP_JSON_PATH = (directorioDatos / "temp_patients.json").string();
+
+    if (!inicializarBase(DB_PATH, directorioDatos, raiz)) {
+        return 1;
+    }
+    std::cout << "Pacientes temporales: " << TEMP_JSON_PATH << std::endl;
+
     httplib::Server svr;
 
     // Habilitar CORS para cualquier cliente (Escritorio / Android)
     svr.set_default_headers({{"Access-Control-Allow-Origin", "*"},
-                             {"Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"},
-                             {"Access-Control-Allow-Headers", "Content-Type, Authorization"}});
+                             {"Access-Control-Allow-Methods", "GET, POST, OPTIONS"},
+                             {"Access-Control-Allow-Headers", "Content-Type"}});
 
     svr.Options(".*", [](const httplib::Request &, httplib::Response &res)
                 { res.status = 204; });
@@ -189,7 +372,19 @@ int main()
                 if (p["triage_level"] == level) count_same_level++;
             }
 
-            new_p["id"] = level * 100 + (count_same_level + 1);
+            int nuevo_id = level * 100 + (count_same_level + 1);
+            bool id_ocupado = true;
+            while (id_ocupado) {
+                id_ocupado = false;
+                for (const auto& p : list) {
+                    if (p["id"] == nuevo_id) {
+                        id_ocupado = true;
+                        ++nuevo_id;
+                        break;
+                    }
+                }
+            }
+            new_p["id"] = nuevo_id;
             new_p["source"] = "SYSTEM";
 
             list.push_back(new_p);
@@ -270,10 +465,10 @@ int main()
                 sqlite3_finalize(stmt);
                 sqlite3_close(db);
                 res.status = 400;
-                res.set_content(R"({"error":"error"})", "application/json");
-            }
+                res.set_content(R"({"error":"No se pudo admitir el paciente"})", "application/json");
                 return;
-        
+            }
+
         sqlite3_finalize(stmt);
 
         // Descontar 1 cama disponible del centro
