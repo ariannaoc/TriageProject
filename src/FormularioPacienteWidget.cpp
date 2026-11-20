@@ -13,6 +13,22 @@
 #include <QResizeEvent>
 #include <QGraphicsOpacityEffect>
 #include <QPixmap>
+#include <QSignalBlocker>
+#include <QUrl>
+#if defined(HAVE_QT_POSITIONING)
+#include <QGeoCoordinate>
+#include <QGeoPositionInfo>
+#include <QGeoPositionInfoSource>
+#if defined(QT_FEATURE_permissions) && QT_CONFIG(permissions)
+#include <QApplication>
+#include <QPermission>
+#include <QLocationPermission>
+#endif
+#endif
+#if defined(HAVE_QT_LOCATION)
+#include <QQuickWidget>
+#include <QQmlContext>
+#endif
 
 namespace {
 QJsonObject leerCatalogo(const QString& ruta) {
@@ -28,6 +44,28 @@ QJsonObject leerCatalogo(const QString& ruta) {
     return documento.object();
 }
 }
+
+#if defined(HAVE_QT_LOCATION)
+CoordenadasMapa::CoordenadasMapa(QObject* parent)
+    : QObject(parent), mLatitud(8.5897), mLongitud(-71.1561) {
+}
+
+void CoordenadasMapa::setLatitud(double value) {
+    if (qFuzzyCompare(mLatitud, value)) {
+        return;
+    }
+    mLatitud = value;
+    emit coordenadasCambiadas();
+}
+
+void CoordenadasMapa::setLongitud(double value) {
+    if (qFuzzyCompare(mLongitud, value)) {
+        return;
+    }
+    mLongitud = value;
+    emit coordenadasCambiadas();
+}
+#endif
 
 FormularioPacienteWidget::FormularioPacienteWidget(QWidget* parent)
     : QWidget(parent), enviando(false) {
@@ -95,15 +133,43 @@ void FormularioPacienteWidget::configurarUI() {
     txtNombre = new QLineEdit(this);
     txtApellido = new QLineEdit(this);
     txtUbicacion = new QLineEdit(this);
-    txtUbicacion->setPlaceholderText("Ej: Centro, Mérida");
+    txtUbicacion->setPlaceholderText("Referencia de ubicación (ej. Frente a la plaza, sector...)");
+    btnGps = new QPushButton("Obtener GPS", this);
+    btnGps->setMinimumHeight(36);
+    lblEstadoGps = new QLabel("", this);
+    lblEstadoGps->setWordWrap(true);
 
     formPersonales->addRow("Centro de destino:", comboCentro);
     formPersonales->addRow("Sexo (F/M):", comboSexo);
     formPersonales->addRow("Edad:", spinEdad);
     formPersonales->addRow("Nombre:", txtNombre);
     formPersonales->addRow("Apellido:", txtApellido);
-    formPersonales->addRow("Ubicación:", txtUbicacion);
+    formPersonales->addRow("Referencia de ubicación:", txtUbicacion);
+
+    auto* layoutGps = new QHBoxLayout();
+    layoutGps->addWidget(btnGps);
+    layoutGps->addWidget(lblEstadoGps, 1);
+    formPersonales->addRow("GPS:", layoutGps);
     layoutContenido->addWidget(grupoPersonales);
+
+#if defined(HAVE_QT_LOCATION)
+    auto* grupoMapa = new QGroupBox("Mapa de ubicación (Mérida)", this);
+    auto* layoutMapa = new QVBoxLayout(grupoMapa);
+    coordsMapa = new CoordenadasMapa(this);
+    connect(coordsMapa, &CoordenadasMapa::coordenadasCambiadas,
+            this, &FormularioPacienteWidget::onCoordenadasMapaCambiadas);
+
+    mapaWidget = new QQuickWidget(this);
+    mapaWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    mapaWidget->setMinimumHeight(280);
+    mapaWidget->rootContext()->setContextProperty("mapaControl", coordsMapa);
+    mapaWidget->setSource(QUrl("qrc:/resources/mapa_ubicacion.qml"));
+    if (mapaWidget->status() == QQuickWidget::Error) {
+        lblEstadoGps->setText("Mapa no disponible: instale los módulos QML de QtLocation.");
+    }
+    layoutMapa->addWidget(mapaWidget);
+    layoutContenido->addWidget(grupoMapa);
+#endif
 
     connect(comboSexo, &QComboBox::currentTextChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
     connect(spinEdad, &QSpinBox::valueChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
@@ -149,10 +215,14 @@ void FormularioPacienteWidget::configurarUI() {
     btnVolver = new QPushButton("⬅ Volver a Inicio", this);
     btnVolver->setMinimumHeight(45);
 
+    btnLimpiar = new QPushButton("Limpiar formulario", this);
+    btnLimpiar->setMinimumHeight(45);
+
     btnEvaluar = new QPushButton("Enviar a la cola del centro", this);
     btnEvaluar->setMinimumHeight(45);
 
     layoutBotones->addWidget(btnVolver);
+    layoutBotones->addWidget(btnLimpiar);
     layoutBotones->addWidget(btnEvaluar);
     layoutContenido->addLayout(layoutBotones);
 
@@ -162,6 +232,11 @@ void FormularioPacienteWidget::configurarUI() {
 
     connect(btnVolver, &QPushButton::clicked, this, &FormularioPacienteWidget::volverAlMain);
     connect(btnEvaluar, &QPushButton::clicked, this, &FormularioPacienteWidget::enviarFormulario);
+    connect(btnGps, &QPushButton::clicked, this, &FormularioPacienteWidget::solicitarUbicacion);
+    connect(btnLimpiar, &QPushButton::clicked, this, &FormularioPacienteWidget::reiniciarFormulario);
+
+    aplicarCoordenadas(latitud, longitud);
+    habilitarReferenciaManual("Escriba una referencia de ubicación o use el GPS.");
 }
 
 void FormularioPacienteWidget::resizeEvent(QResizeEvent* event) {
@@ -196,6 +271,161 @@ void FormularioPacienteWidget::setEnviando(bool cargando) {
     btnEvaluar->setText(cargando ? "Enviando…" : "Enviar a la cola del centro");
     lblEstadoFormulario->setText(cargando ? "Enviando datos a la API…" : "");
 }
+
+void FormularioPacienteWidget::reiniciarFormulario() {
+#if defined(HAVE_QT_POSITIONING)
+    if (fuenteGps) {
+        fuenteGps->stopUpdates();
+        disconnect(fuenteGps, nullptr, this, nullptr);
+        fuenteGps->deleteLater();
+        fuenteGps = nullptr;
+    }
+#endif
+
+    comboAfectado->setCurrentIndex(0);
+    comboCentro->setCurrentIndex(0);
+    comboSexo->setCurrentIndex(0);
+    spinEdad->setValue(0);
+    txtNombre->clear();
+    txtApellido->clear();
+    txtUbicacion->clear();
+    txtUbicacion->setReadOnly(false);
+    comboSintoma->setCurrentIndex(0);
+
+    chkCardio->setChecked(false);
+    chkInmuno->setChecked(false);
+    chkRenal->setChecked(false);
+    chkEmbarazo->setChecked(false);
+    chkEmbarazo->setEnabled(false);
+    chkRespiratorio->setChecked(false);
+    chkMetabolico->setChecked(false);
+    chkNeuro->setChecked(false);
+
+    aplicarCoordenadas(8.5897, -71.1561);
+    habilitarReferenciaManual("Escriba una referencia de ubicación o use el GPS.");
+    setEnviando(false);
+}
+
+void FormularioPacienteWidget::aplicarCoordenadas(double lat, double lon) {
+    latitud = lat;
+    longitud = lon;
+
+#if defined(HAVE_QT_LOCATION)
+    if (coordsMapa) {
+        const QSignalBlocker bloquearMapa(coordsMapa);
+        coordsMapa->setLatitud(lat);
+        coordsMapa->setLongitud(lon);
+    }
+#endif
+}
+
+void FormularioPacienteWidget::habilitarReferenciaManual(const QString& mensaje) {
+    gpsObtenido = false;
+    if (txtUbicacion->text() == "Ubicación detectada por GPS"
+        || txtUbicacion->text() == "Ubicación ajustada en el mapa") {
+        txtUbicacion->clear();
+    }
+    txtUbicacion->setReadOnly(false);
+    lblEstadoGps->setText(mensaje);
+}
+
+void FormularioPacienteWidget::marcarUbicacionDetectada(const QString& referencia, const QString& estado) {
+    gpsObtenido = true;
+    txtUbicacion->setText(referencia);
+    txtUbicacion->setReadOnly(true);
+    lblEstadoGps->setText(estado);
+}
+
+#if defined(HAVE_QT_LOCATION)
+void FormularioPacienteWidget::onCoordenadasMapaCambiadas() {
+    if (!coordsMapa) {
+        return;
+    }
+    aplicarCoordenadas(coordsMapa->latitud(), coordsMapa->longitud());
+    marcarUbicacionDetectada("Ubicación ajustada en el mapa", "Ubicación ajustada en el mapa.");
+}
+#endif
+
+void FormularioPacienteWidget::solicitarUbicacion() {
+#if defined(HAVE_QT_POSITIONING)
+#if defined(QT_FEATURE_permissions) && QT_CONFIG(permissions)
+    QLocationPermission permiso;
+    permiso.setAccuracy(QLocationPermission::Precise);
+    permiso.setAvailability(QLocationPermission::WhenInUse);
+
+    switch (qApp->checkPermission(permiso)) {
+    case Qt::PermissionStatus::Granted:
+        iniciarLecturaGps();
+        return;
+    case Qt::PermissionStatus::Denied:
+        habilitarReferenciaManual("Permiso de ubicación denegado. Escriba una referencia de ubicación.");
+        return;
+    case Qt::PermissionStatus::Undetermined:
+        habilitarReferenciaManual("Solicitando permiso de ubicación...");
+        qApp->requestPermission(permiso, this, [this](const QPermission& resultado) {
+            if (resultado.status() == Qt::PermissionStatus::Granted) {
+                iniciarLecturaGps();
+            } else {
+                habilitarReferenciaManual("Permiso de ubicación denegado. Escriba una referencia de ubicación.");
+            }
+        });
+        return;
+    }
+#else
+    iniciarLecturaGps();
+#endif
+#else
+    habilitarReferenciaManual("GPS no disponible en esta compilación. Escriba una referencia de ubicación.");
+#endif
+}
+
+#if defined(HAVE_QT_POSITIONING)
+void FormularioPacienteWidget::iniciarLecturaGps() {
+    if (!fuenteGps) {
+        fuenteGps = QGeoPositionInfoSource::createDefaultSource(this);
+        if (fuenteGps) {
+            fuenteGps->setPreferredPositioningMethods(QGeoPositionInfoSource::AllPositioningMethods);
+            connect(fuenteGps, &QGeoPositionInfoSource::positionUpdated,
+                    this, &FormularioPacienteWidget::onPosicionActualizada);
+            connect(fuenteGps, &QGeoPositionInfoSource::errorOccurred, this,
+                    [this](QGeoPositionInfoSource::Error error) {
+                if (fuenteGps) {
+                    fuenteGps->stopUpdates();
+                    disconnect(fuenteGps, nullptr, this, nullptr);
+                    fuenteGps->deleteLater();
+                    fuenteGps = nullptr;
+                }
+                habilitarReferenciaManual(error == QGeoPositionInfoSource::UpdateTimeoutError
+                    ? "Sin señal GPS. Escriba una referencia de ubicación."
+                    : "No se pudo leer el GPS. Escriba una referencia de ubicación.");
+            });
+        }
+    }
+    if (!fuenteGps) {
+        habilitarReferenciaManual("Sin señal GPS en este equipo. Escriba una referencia de ubicación.");
+        return;
+    }
+    habilitarReferenciaManual("Obteniendo GPS...");
+    fuenteGps->requestUpdate(15000);
+}
+
+void FormularioPacienteWidget::onPosicionActualizada(const QGeoPositionInfo& info) {
+    if (!info.isValid()) {
+        return;
+    }
+
+    const QGeoCoordinate coord = info.coordinate();
+    aplicarCoordenadas(coord.latitude(), coord.longitude());
+    marcarUbicacionDetectada("Ubicación detectada por GPS", "Ubicación detectada por GPS.");
+
+    if (fuenteGps) {
+        fuenteGps->stopUpdates();
+        disconnect(fuenteGps, nullptr, this, nullptr);
+        fuenteGps->deleteLater();
+        fuenteGps = nullptr;
+    }
+}
+#endif
 
 void FormularioPacienteWidget::verificarEmbarazo() {
     bool esFemenino = (comboSexo->currentText() == "Femenino");
@@ -245,11 +475,13 @@ void FormularioPacienteWidget::enviarFormulario() {
     const QString nombre = txtNombre->text().trimmed();
     const QString apellido = txtApellido->text().trimmed();
     const int edad = spinEdad->value();
+    const QString referencia = txtUbicacion->text().trimmed();
+    const bool ubicacionValida = gpsObtenido || !referencia.isEmpty();
 
     if (centroId <= 0 || idSintoma <= 0 || nombre.isEmpty() || apellido.isEmpty()
-        || edad <= 0 || comboSexo->currentIndex() <= 0) {
+        || edad <= 0 || comboSexo->currentIndex() <= 0 || !ubicacionValida) {
         QMessageBox::warning(this, "Datos incompletos",
-            "Seleccione centro, sexo y síntoma, e ingrese nombre, apellido y edad.");
+            "Seleccione centro, sexo y síntoma, ingrese nombre, apellido y edad, y escriba una referencia de ubicación o detecte la ubicación por GPS.");
         return;
     }
 
@@ -297,7 +529,9 @@ void FormularioPacienteWidget::enviarFormulario() {
     datos["symptom_ids"] = idsSintomas;
     datos["risk_factor_ids"] = factores;
     datos["ambulance_requested"] = nivel <= 2;
-    datos["location"] = txtUbicacion->text().trimmed();
+    datos["location"] = referencia;
+    datos["latitud"] = latitud;
+    datos["longitud"] = longitud;
     datos["source"] = "SYSTEM";
     datos["created_at"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
