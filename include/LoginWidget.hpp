@@ -1,7 +1,6 @@
 #pragma once
 #include <QWidget>
 #include <QString>
-#include<QLabel>
 #include <QResizeEvent>
 #include "ModelosCentro.hpp"
 #include "ModelosApi.hpp"
@@ -25,13 +24,11 @@ private:
     AVLTree<CredencialCentro>* repositorioCentros;
     bool esperandoLogin;
 
-    // Controles de Iniciar Sesión
     QLineEdit* inputLoginUser;
     QLineEdit* inputLoginPass;
     QPushButton* btnEntrar;
     QLabel* lblEstadoLogin;
 
-    // Controles de Registro de Centro
     QLineEdit* inputRegNombreCentro;
     QComboBox* comboRegTipoCentro;
     QSpinBox* spinRegCapacidad;
@@ -39,7 +36,6 @@ private:
     QLineEdit* inputRegPass;
 
     QTabWidget* pestanasAuth;
-
     QLabel* lblFondo = nullptr;
 
     void configurarUI();
@@ -51,8 +47,6 @@ private slots:
     void onLoginOk(const SesionCentro& sesion);
     void onRequestFailed(const QString& operation, const QString& message);
     void onRequestFinished();
-
-
 
 public:
     explicit LoginWidget(ApiClient* api, AVLTree<CredencialCentro>* repo, QWidget* parent = nullptr);

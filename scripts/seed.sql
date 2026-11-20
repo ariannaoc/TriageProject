@@ -1,31 +1,40 @@
--- Limpiar registros previos
+-- Limpiar datos existentes (en orden por dependencias)
+DELETE FROM triage_records;
+DELETE FROM patients;
+DELETE FROM users;
 DELETE FROM centers;
-DELETE FROM sqlite_sequence WHERE name='centers';
 
-INSERT INTO centers (name, type, max_level, capacity, location, latitude, longitude)
-VALUES 
-    ('Instituto Autónomo Hospital Universitario de Los Andes (IAHULA)', 'Hospital Tipo IV', 1, 150, 'Av. 16 de Septiembre, Parroquia Domingo Peña, Mérida', 8.5839, -71.1578),
-    ('Hospital Sor Juana Inés de la Cruz', 'Hospital Tipo II', 2, 50, 'Sector La Hechicera / Av. Alberto Carnevali, Parroquia Spinetti Dini, Mérida', 8.6215, -71.1520),
-    ('Hospital Dr. Tulio Carnevalli Salvatierra (IVSS)', 'Hospital Tipo II', 2, 50, 'Av. Las Américas con Av. Ezio Valeri, Parroquia Mariano Picón Salas, Mérida', 8.5985, -71.1602),
-    ('Ambulatorio Urbano Tipo III Venezuela', 'Ambulatorio Urbano Tipo III', 3, 8, 'Calle 16 entre Av. 3 y 4 / Urb. Humboldt, Parroquia Spinetti Dini, Mérida', 8.6112, -71.1465),
-    ('Ambulatorio Urbano Tipo III Belén', 'Ambulatorio Urbano Tipo III', 3, 6, 'Pasaje Sánchez, Sector Belén, Parroquia Arias, Mérida', 8.6042, -71.1396),
-    ('Ambulatorio Urbano Tipo III El Llano (Dr. Rafael Baez)', 'Ambulatorio Urbano Tipo III', 3, 6, 'Sector El Llano, Av. 3 entre calles 29 y 30, Parroquia Arias, Mérida', 8.5910, -71.1472),
-    ('Ambulatorio Urbano Tipo III Los Sausales', 'Ambulatorio Urbano Tipo III', 3, 6, 'Urbanización Los Sausales, Av. Las Américas, Parroquia Mariano Picón Salas', 8.5855, -71.1685),
-    ('Ambulatorio Urbano Tipo III Los Curos', 'Ambulatorio Urbano Tipo III', 3, 10, 'Urbanización Los Curos, Parroquia Osuna Rodríguez, Mérida', 8.5535, -71.1921),
-    ('Ambulatorio Urbano Tipo I Humbolt', 'Ambulatorio Urbano Tipo I', 4, 5, 'Urbanización Humboldt, Av. Las Américas, Parroquia Caracciolo Parra Pérez, Mérida', 8.5815, -71.1730),
-    ('Ambulatorio Urbano Tipo I La Milagrosa', 'Ambulatorio Urbano Tipo I', 4, 5, 'Calle Principal, Barrio La Milagrosa, Parroquia Milla, Mérida', 8.6185, -71.1350),
-    ('Ambulatorio Urbano Tipo I Santa Elena', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector Santa Elena, Av. 16 de Septiembre, Parroquia Domingo Peña, Mérida', 8.5742, -71.1645),
-    ('Ambulatorio Urbano Tipo I La Mara', 'Ambulatorio Urbano Tipo I', 4, 5, 'Calle 1 Guaicaipuro, Urb. La Mara, Parroquia Juan Rodríguez Suárez, Mérida', 8.5620, -71.1850),
+-- Reiniciar contadores de AUTOINCREMENT para IDs deterministas
+DELETE FROM sqlite_sequence WHERE name IN ('centers', 'users', 'triage_records');
+
+-- Centros de salud (con coordenadas reales de Mérida, Venezuela)
+-- IDs resultantes: IAHULA=1, Sor Juana=2, El Llano=3
+INSERT INTO centers (name, type, max_level, capacity, location, latitude, longitude) VALUES
+    ('IAHULA - Instituto Autónomo Hospital Universitario de Los Andes', 'Hospital Tipo IV', 1, 150, 'Av. 16 de Septiembre, Sector Campo de Oro, Parroquia Caracciolo Parra Pérez, Mérida', 8.5892, -71.1578),
+    ('Hospital Sor Juana Inés de la Cruz (Maternidad)', 'Hospital Tipo III', 2, 60, 'Av. Urdaneta, esquina con Av. 5, Sector Glorias Patrias, Parroquia Domingo Peña, Mérida', 8.5925, -71.1460),
+    ('Ambulatorio Urbano Tipo III El Llano', 'Ambulatorio Urbano Tipo III', 3, 25, 'Av. Los Próceres, Urb. Las Tapias, Sector El Llano, Parroquia Osuna Rodríguez, Mérida', 8.5880, -71.1610),
+    ('Ambulatorio Urbano Tipo I San Jacinto (PUMM)', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector San Jacinto, Plaza Bolívar de San Jacinto, Parroquia Jacinto Plaza, Mérida', 8.5745, -71.1610),
     ('Ambulatorio Urbano Tipo I Arquidiócesano', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector Belén / Centro, Calle 17 entre Av. 2 y 3, Parroquia Arias, Mérida', 8.6015, -71.1410),
     ('Ambulatorio Urbano Tipo I La Carabobo', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector Cuenca del Chama, Barrio Carabobo, Parroquia Jacinto Plaza, Mérida', 8.5695, -71.1480);
+
+-- Datos operativos para el motor de enrutamiento (max_level es inverso a complejidad)
+UPDATE centers SET
+    nivel_complejidad = 5 - max_level,
+    capacidad_total = capacity,
+    cola_actual = 0;
+
+UPDATE centers SET cola_actual = 12 WHERE center_id = 1;
+UPDATE centers SET cola_actual = 6 WHERE center_id = 2;
 
 -- Limpiar usuarios previos de prueba
 DELETE FROM users;
 DELETE FROM sqlite_sequence WHERE name='users';
 
-INSERT INTO users (center_id, username, password_hash)
-VALUES 
---   iahula_admin   -> admin123
-    (1, 'iahula_admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'),
---   sorjuana_admin -> 123456
-    (2, 'sorjuana_admin', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92');
+-- Usuarios de prueba (contraseñas hasheadas con SHA-256)
+-- IAHULA: usuario 'iahula_admin', contraseña 'admin123'
+INSERT INTO users (username, password_hash, role, center_id)
+SELECT 'iahula_admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'ADMIN', 1;
+
+-- Sor Juana: usuario 'sorjuana_admin', contraseña '123456'
+INSERT INTO users (username, password_hash, role, center_id)
+SELECT 'sorjuana_admin', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', 'ADMIN', 2;

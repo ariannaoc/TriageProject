@@ -12,8 +12,8 @@ set(CMAKE_AUTOUIC ON)
 
 # Buscar librerias
 find_package(Designar REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network
-             OPTIONAL_COMPONENTS Positioning Location QuickWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network Positioning
+             OPTIONAL_COMPONENTS Location QuickWidgets)
 if(NOT ANDROID)
     find_package(SQLite3 REQUIRED)
 endif()
@@ -27,6 +27,10 @@ include_directories(include)
 
 # Cliente
 qt_add_executable(TriageProject
+    src/BosqueTriaje.cpp
+    src/MotorTriaje.cpp
+    src/GestorCentros.cpp
+    src/MotorEnrutamiento.cpp
     src/main.cpp
     src/MainWindow.cpp
     src/LoginWidget.cpp
@@ -35,6 +39,11 @@ qt_add_executable(TriageProject
     src/FormularioPacienteWidget.cpp
     src/ApiClient.cpp
     src/ModelosApi.cpp
+    include/modelos_triaje.hpp
+    include/BosqueTriaje.hpp
+    include/MotorTriaje.hpp
+    include/GestorCentros.hpp
+    include/MotorEnrutamiento.hpp
     include/MainWindow.hpp
     include/LoginWidget.hpp
     include/VistaMain.hpp
@@ -50,12 +59,8 @@ target_link_libraries(TriageProject PRIVATE
     Qt6::Widgets
     Qt6::Sql
     Qt6::Network
+    Qt6::Positioning
 )
-
-if(Qt6Positioning_FOUND)
-    target_compile_definitions(TriageProject PRIVATE HAVE_QT_POSITIONING)
-    target_link_libraries(TriageProject PRIVATE Qt6::Positioning)
-endif()
 
 if(Qt6Location_FOUND AND Qt6QuickWidgets_FOUND)
     target_compile_definitions(TriageProject PRIVATE HAVE_QT_LOCATION)
@@ -76,3 +81,13 @@ if(NOT ANDROID)
         pthread
     )
 endif()
+
+# Target de pruebas del motor de triaje y enrutamiento (sin Qt)
+add_executable(test_motores
+    tests/test_motores.cpp
+    src/BosqueTriaje.cpp
+    src/MotorTriaje.cpp
+    src/GestorCentros.cpp
+    src/MotorEnrutamiento.cpp
+)
+target_link_libraries(test_motores PRIVATE Designar::Designar)

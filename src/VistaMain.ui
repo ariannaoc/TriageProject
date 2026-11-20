@@ -166,7 +166,7 @@ QPushButton:hover { background-color: #0EA899; }</string>
     <string/>
    </property>
    <property name="pixmap">
-    <pixmap>../resources/vistappal.png</pixmap>
+    <pixmap resource="../recursos.qrc">:/resources/vistappal.png</pixmap>
    </property>
   </widget>
   <widget class="QLabel" name="label_fondo">
@@ -182,7 +182,7 @@ QPushButton:hover { background-color: #0EA899; }</string>
     <string/>
    </property>
    <property name="pixmap">
-    <pixmap>../resources/fondo.png</pixmap>
+    <pixmap resource="../recursos.qrc">:/resources/fondo.png</pixmap>
    </property>
   </widget>
   <widget class="QLabel" name="label_2">

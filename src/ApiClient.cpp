@@ -5,6 +5,7 @@
 #include <QJsonParseError>
 #include <QNetworkRequest>
 #include <QTimer>
+#include <QUrlQuery>
 
 namespace {
 constexpr int kTimeoutMs = 8000;
@@ -50,6 +51,22 @@ void ApiClient::admitPatient(int centerId, int tempId, const QString& cedula) {
 void ApiClient::dischargePatient(int centerId, const QString& cedula) {
     postJson(QString("/api/centers/%1/discharge/%2").arg(centerId).arg(cedula),
              QJsonObject{}, "discharge");
+}
+
+void ApiClient::geocodeAddress(const QString& direccion) {
+    QUrl url(QStringLiteral("https://nominatim.openstreetmap.org/search"));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("q"), direccion.trimmed() + QStringLiteral(", Mérida, Venezuela"));
+    query.addQueryItem(QStringLiteral("format"), QStringLiteral("jsonv2"));
+    query.addQueryItem(QStringLiteral("limit"), QStringLiteral("1"));
+    query.addQueryItem(QStringLiteral("bounded"), QStringLiteral("1"));
+    query.addQueryItem(QStringLiteral("viewbox"), QStringLiteral("-71.30,8.70,-70.95,8.45"));
+    url.setQuery(query);
+
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent", "TriageProject/1.0 (Qt desktop client)");
+    request.setRawHeader("Accept", "application/json");
+    prepareReply(manager.get(request), "geocode");
 }
 
 QUrl ApiClient::endpoint(const QString& path) const {
@@ -116,6 +133,26 @@ void ApiClient::onFinished(QNetworkReply* reply) {
     const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parseError);
     if (parseError.error != QJsonParseError::NoError) {
         fail(reply, "Respuesta inválida de la API: " + parseError.errorString());
+        return;
+    }
+
+    if (operation == "geocode") {
+        if (doc.isArray() && !doc.array().isEmpty()) {
+            const QJsonObject primero = doc.array().first().toObject();
+            bool okLat = false;
+            bool okLng = false;
+            const double lat = primero.value(QStringLiteral("lat")).toString().toDouble(&okLat);
+            const double lng = primero.value(QStringLiteral("lon")).toString().toDouble(&okLng);
+            if (okLat && okLng) {
+                emit geocodificado(lat, lng);
+            } else {
+                emit failed("geocode", "No se pudo interpretar la ubicación devuelta.");
+            }
+        } else {
+            emit failed("geocode", "No se encontró la dirección ingresada.");
+        }
+        emit requestFinished();
+        reply->deleteLater();
         return;
     }
 

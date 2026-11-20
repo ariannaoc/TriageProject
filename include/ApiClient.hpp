@@ -21,6 +21,7 @@ public:
     void createTempPatient(const QJsonObject& patient);
     void admitPatient(int centerId, int tempId, const QString& cedula);
     void dischargePatient(int centerId, const QString& cedula);
+    void geocodeAddress(const QString& direccion);
 
 signals:
     void requestStarted(const QString& operation);
@@ -30,6 +31,7 @@ signals:
     void centersLoaded(const QVector<CentroInfo>& centros);
     void pendingLoaded(int centerId, const QVector<PacienteTemp>& pacientes);
     void operationOk(const QString& message);
+    void geocodificado(double latitud, double longitud);
     void failed(const QString& operation, const QString& message);
 
 private slots:

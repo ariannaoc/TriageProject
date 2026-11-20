@@ -8,11 +8,9 @@ VistaMain::VistaMain(QWidget* parent) : QWidget(parent), ui(new Ui::VistaMain) {
     setAttribute(Qt::WA_StyledBackground, true);
 
     auto* efectoOpacidad = new QGraphicsOpacityEffect(this);
-    efectoOpacidad->setOpacity(0.60); // Ajusta entre 0.3 y 0.7 según qué tan tenue la quieras
+    efectoOpacidad->setOpacity(0.60);
     ui->label_fondo->setGraphicsEffect(efectoOpacidad);
     ui->label_fondo->lower();
-
-  
 
     ui->BotonEmergencia->setIcon(QIcon(":/resources/Emergencia.png"));
     ui->BotonEmergencia->setIconSize(QSize(28, 28));

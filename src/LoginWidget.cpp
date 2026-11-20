@@ -2,19 +2,19 @@
 #include "ApiClient.hpp"
 #include <QComboBox>
 #include <QFormLayout>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QCryptographicHash>
-#include <QGraphicsOpacityEffect>
-#include <QPixmap>
-#include <QResizeEvent>
 
 LoginWidget::LoginWidget(ApiClient* api, AVLTree<CredencialCentro>* repo, QWidget* parent)
     : QWidget(parent), api(api), repositorioCentros(repo), esperandoLogin(false) {
@@ -35,12 +35,11 @@ void LoginWidget::configurarUI() {
     setObjectName("LoginWidget");
     setAttribute(Qt::WA_StyledBackground, true);
 
-    // Imagen de fondo (la misma de VistaMain)
     lblFondo = new QLabel(this);
     lblFondo->setPixmap(QPixmap(":/resources/fondo.png"));
     lblFondo->setScaledContents(true);
     auto* efectoOpacidad = new QGraphicsOpacityEffect(this);
-    efectoOpacidad->setOpacity(0.30); // Ajusta entre 0.20 y 0.45 según prefieras
+    efectoOpacidad->setOpacity(0.30);
     lblFondo->setGraphicsEffect(efectoOpacidad);
     lblFondo->lower();
 
@@ -48,7 +47,6 @@ void LoginWidget::configurarUI() {
     layoutPrincipal->setContentsMargins(80, 40, 80, 40);
     layoutPrincipal->setSpacing(15);
 
-    // Encabezado
     auto* titulo = new QLabel("Módulo Centro de Salud — Autenticación", this);
     titulo->setAlignment(Qt::AlignCenter);
     titulo->setStyleSheet("font-size: 24px; font-weight: bold; color: #0E9F91; background: transparent;");
@@ -59,9 +57,6 @@ void LoginWidget::configurarUI() {
 
     pestanasAuth = new QTabWidget(this);
 
-    // ==========================================
-    // Pestaña 1: Iniciar sesión (LOGIN)
-    // ==========================================
     auto* tabLogin = new QWidget(this);
     tabLogin->setStyleSheet("background: transparent;");
     auto* layoutLogin = new QVBoxLayout(tabLogin);
@@ -100,9 +95,6 @@ void LoginWidget::configurarUI() {
     layoutLogin->addWidget(notaPrueba);
     layoutLogin->addStretch();
 
-    // ==========================================
-    // PESTAÑA 2: REGISTRO DE CENTRO DE SALUD
-    // ==========================================
     auto* tabRegistro = new QWidget(this);
     tabRegistro->setStyleSheet("background: transparent;");
     auto* layoutReg = new QVBoxLayout(tabRegistro);
@@ -151,7 +143,6 @@ void LoginWidget::configurarUI() {
     pestanasAuth->addTab(tabRegistro, QIcon(":/resources/centro_salud.png"), "Registrar Centro");
     pestanasAuth->setIconSize(QSize(20, 20));
 
-    // Botón para volver a la ventana Main
     auto* btnVolver = new QPushButton("⬅ Volver al Menú Principal (Main)", this);
     btnVolver->setMinimumHeight(40);
     btnVolver->setCursor(Qt::PointingHandCursor);
@@ -165,7 +156,6 @@ void LoginWidget::configurarUI() {
     layoutPrincipal->addWidget(pestanasAuth);
     layoutPrincipal->addWidget(btnVolver);
 
-    // Conexiones de eventos
     connect(btnEntrar, &QPushButton::clicked, this, &LoginWidget::procesarLogin);
     connect(btnRegistrar, &QPushButton::clicked, this, &LoginWidget::procesarRegistro);
     connect(btnVolver, &QPushButton::clicked, this, &LoginWidget::volverAlMain);
@@ -215,7 +205,7 @@ void LoginWidget::configurarUI() {
 void LoginWidget::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     if (lblFondo) {
-        lblFondo->setGeometry(this->rect());
+        lblFondo->setGeometry(rect());
         lblFondo->lower();
     }
 }
@@ -281,7 +271,6 @@ void LoginWidget::procesarRegistro() {
         capacidad
     };
 
-    // Verificar en DeSiGNAR si el usuario ya existe
     if (repositorioCentros->search(nuevaCredencial) != nullptr) {
         QMessageBox::warning(this, "Usuario existente", "Ese nombre de usuario ya está registrado en el sistema.");
         return;
@@ -295,5 +284,5 @@ void LoginWidget::procesarRegistro() {
     inputRegNombreCentro->clear();
     inputRegUser->clear();
     inputRegPass->clear();
-    pestanasAuth->setCurrentIndex(0); // Cambiar a la pestaña de Login
+    pestanasAuth->setCurrentIndex(0);
 }
