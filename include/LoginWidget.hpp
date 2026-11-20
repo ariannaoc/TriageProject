@@ -1,6 +1,8 @@
 #pragma once
 #include <QWidget>
 #include <QString>
+#include<QLabel>
+#include <QResizeEvent>
 #include "ModelosCentro.hpp"
 #include "ModelosApi.hpp"
 
@@ -14,6 +16,9 @@ class QTabWidget;
 
 class LoginWidget : public QWidget {
     Q_OBJECT
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     ApiClient* api;
@@ -35,6 +40,8 @@ private:
 
     QTabWidget* pestanasAuth;
 
+    QLabel* lblFondo = nullptr;
+
     void configurarUI();
     void setLoginLoading(bool cargando);
 
@@ -44,6 +51,8 @@ private slots:
     void onLoginOk(const SesionCentro& sesion);
     void onRequestFailed(const QString& operation, const QString& message);
     void onRequestFinished();
+
+
 
 public:
     explicit LoginWidget(ApiClient* api, AVLTree<CredencialCentro>* repo, QWidget* parent = nullptr);

@@ -9,6 +9,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include "ModelosApi.hpp"
+#include <QResizeEvent>
 
 class FormularioPacienteWidget : public QWidget {
     Q_OBJECT
@@ -22,6 +23,9 @@ signals:
     void volverAlMain();
     void pacienteListo(const QJsonObject& datos);
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
     QComboBox* comboCentro;
     QComboBox* comboAfectado;
@@ -30,6 +34,8 @@ private:
     QLineEdit* txtNombre;
     QLineEdit* txtApellido;
     QLineEdit* txtUbicacion;
+    
+    QLabel* lblFondo = nullptr;
 
     QCheckBox* chkCardio;
     QCheckBox* chkInmuno;
@@ -59,4 +65,6 @@ private:
 private slots:
     void verificarEmbarazo();
     void enviarFormulario();
+
+
 };

@@ -10,6 +10,9 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QDateTime>
+#include <QResizeEvent>
+#include <QGraphicsOpacityEffect>
+#include <QPixmap>
 
 namespace {
 QJsonObject leerCatalogo(const QString& ruta) {
@@ -40,21 +43,35 @@ void FormularioPacienteWidget::cargarCatalogos() {
 }
 
 void FormularioPacienteWidget::configurarUI() {
+    setObjectName("FormularioPacienteWidget");
+
+    // Imagen de fondo (la misma de VistaMain)
+    lblFondo = new QLabel(this);
+    lblFondo->setPixmap(QPixmap(":/resources/fondo.png"));
+    lblFondo->setScaledContents(true);
+    auto* efectoOpacidad = new QGraphicsOpacityEffect(this);
+    efectoOpacidad->setOpacity(0.30); // Ajusta entre 0.20 y 0.45 si la quieres más o menos tenue
+    lblFondo->setGraphicsEffect(efectoOpacidad);
+    lblFondo->lower();
+
     auto* layoutPrincipal = new QVBoxLayout(this);
     layoutPrincipal->setContentsMargins(0, 0, 0, 0);
 
     auto* scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+    scrollArea->viewport()->setStyleSheet("background: transparent;");
 
     auto* widgetContenido = new QWidget();
+    widgetContenido->setStyleSheet("background: transparent;");
     auto* layoutContenido = new QVBoxLayout(widgetContenido);
     layoutContenido->setContentsMargins(40, 20, 40, 20);
     layoutContenido->setSpacing(15);
 
     auto* lblTitulo = new QLabel("Registro de Emergencia y Triaje", this);
     lblTitulo->setAlignment(Qt::AlignCenter);
-    lblTitulo->setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff;");
+    lblTitulo->setStyleSheet("font-size: 24px; font-weight: bold; color: #0E9F91; margin-bottom: 6px; background: transparent;");
     layoutContenido->addWidget(lblTitulo);
 
     auto* grupoAfectado = new QGroupBox("¿Quién ha tenido la emergencia?", this);
@@ -125,7 +142,7 @@ void FormularioPacienteWidget::configurarUI() {
 
     lblEstadoFormulario = new QLabel("", this);
     lblEstadoFormulario->setAlignment(Qt::AlignCenter);
-    lblEstadoFormulario->setStyleSheet("color: #90caf9; font-size: 13px;");
+    lblEstadoFormulario->setStyleSheet("color: #0E9F91; font-weight: bold; font-size: 13px; background: transparent;");
     layoutContenido->addWidget(lblEstadoFormulario);
 
     auto* layoutBotones = new QHBoxLayout();
@@ -145,6 +162,14 @@ void FormularioPacienteWidget::configurarUI() {
 
     connect(btnVolver, &QPushButton::clicked, this, &FormularioPacienteWidget::volverAlMain);
     connect(btnEvaluar, &QPushButton::clicked, this, &FormularioPacienteWidget::enviarFormulario);
+}
+
+void FormularioPacienteWidget::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    if (lblFondo) {
+        lblFondo->setGeometry(this->rect());
+        lblFondo->lower();
+    }
 }
 
 void FormularioPacienteWidget::setCentros(const QVector<CentroInfo>& centros) {
@@ -281,18 +306,61 @@ void FormularioPacienteWidget::enviarFormulario() {
 }
 
 void FormularioPacienteWidget::aplicarEstilos() {
+    setAttribute(Qt::WA_StyledBackground, true);
+
     this->setStyleSheet(
-        "QWidget { background-color: #2b2b2b; color: #ffffff; font-size: 14px; }"
-        "QGroupBox { font-weight: bold; border: 1px solid #555555; border-radius: 6px; margin-top: 12px; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; color: #90caf9; }"
-        "QLineEdit, QSpinBox, QComboBox { background-color: #3c3c3c; border: 1px solid #555; border-radius: 4px; padding: 6px; color: white; }"
-        "QCheckBox { padding: 4px; }"
-        "QCheckBox::indicator { width: 18px; height: 18px; }"
-        "QCheckBox:disabled { color: #777777; }"
+        "QWidget#FormularioPacienteWidget { background-color: #F8FCFC; }"
+        "QGroupBox {"
+        "    background-color: rgba(255, 255, 255, 232);"
+        "    font-weight: bold;"
+        "    font-size: 14px;"
+        "    border: 1px solid #E2E8F0;"
+        "    border-radius: 10px;"
+        "    margin-top: 16px;"
+        "    padding: 14px 12px 12px 12px;"
+        "}"
+        "QGroupBox::title {"
+        "    subcontrol-origin: margin;"
+        "    subcontrol-position: top left;"
+        "    left: 12px;"
+        "    padding: 2px 8px;"
+        "    color: #0E9F91;"
+        "    background-color: rgba(248, 252, 252, 240);"
+        "    border-radius: 4px;"
+        "}"
+        "QLabel { background-color: transparent; color: #2D3748; font-size: 14px; }"
+        "QLineEdit, QSpinBox, QComboBox {"
+        "    background-color: #FFFFFF;"
+        "    border: 1.5px solid #CBD5E0;"
+        "    border-radius: 6px;"
+        "    padding: 6px 10px;"
+        "    color: #1A202C;"
+        "    font-size: 14px;"
+        "}"
+        "QLineEdit:focus, QSpinBox:focus, QComboBox:focus {"
+        "    border: 1.5px solid #12C6B5;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "    background-color: #FFFFFF;"
+        "    color: #1A202C;"
+        "    selection-background-color: #E6FAF8;"
+        "    selection-color: #0E9F91;"
+        "}"
+        "QCheckBox { background-color: transparent; color: #2D3748; font-size: 14px; padding: 4px; spacing: 8px; }"
+        "QCheckBox::indicator { width: 18px; height: 18px; border-radius: 4px; border: 1.5px solid #CBD5E0; background-color: #FFFFFF; }"
+        "QCheckBox::indicator:checked { background-color: #12C6B5; border-color: #12C6B5; }"
+        "QCheckBox:disabled { color: #A0AEC0; }"
     );
 
-    btnEvaluar->setStyleSheet("QPushButton { background-color: #d32f2f; color: white; font-weight: bold; border-radius: 6px; }"
-                              "QPushButton:hover { background-color: #b71c1c; }");
-    btnVolver->setStyleSheet("QPushButton { background-color: #555555; color: white; font-weight: bold; border-radius: 6px; }"
-                             "QPushButton:hover { background-color: #444444; }");
+    btnEvaluar->setCursor(Qt::PointingHandCursor);
+    btnEvaluar->setStyleSheet(
+        "QPushButton { background-color: #12C6B5; color: #FFFFFF; font-weight: bold; font-size: 14px; border-radius: 8px; padding: 10px 18px; border: none; }"
+        "QPushButton:hover { background-color: #0EA899; }"
+    );
+
+    btnVolver->setCursor(Qt::PointingHandCursor);
+    btnVolver->setStyleSheet(
+        "QPushButton { background-color: #FFFFFF; color: #2D3748; font-weight: bold; font-size: 14px; border: 2px solid #12C6B5; border-radius: 8px; padding: 10px 18px; }"
+        "QPushButton:hover { background-color: #E6FAF8; }"
+    );
 }
