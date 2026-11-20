@@ -1,0 +1,61 @@
+{
+    "age_risk_rules": [
+    { "id": "AGE_INFANT", "label": "Edad Vulnerable (Infantil < 5 años)", "condition": "age < 5", "points": 15 },
+    { "id": "AGE_ELDERLY", "label": "Edad Vulnerable (Adulto Mayor > 65 años)", "condition": "age > 65", "points": 15 }
+  ],
+  "risk_factors": [
+    {
+      "id": "RF_CARDIO",
+      "name": "Cardiovascular Severa",
+      "description": "Insuficiencia cardíaca, antecedentes de infarto o arritmias graves.",
+      "points": 10,
+      "constraints": null
+    },
+    {
+      "id": "RF_INMUNO",
+      "name": "Inmunosupresión / Cáncer / Anticoagulación",
+      "description": "Cáncer en quimioterapia, VIH/SIDA, uso de corticoides o anticoagulantes.",
+      "points": 10,
+      "constraints": null
+    },
+    {
+      "id": "RF_RENAL",
+      "name": "Enfermedad Renal Crónica",
+      "description": "Paciente en diálisis o con falla renal conocida.",
+      "points": 10,
+      "constraints": null
+    },
+    {
+      "id": "RF_PREGNANCY",
+      "name": "Embarazo o Postparto",
+      "description": "Gestante o dentro de los 40 días postparto.",
+      "points": 10,
+      "constraints": {
+        "sex": "F",
+        "min_age": 10,
+        "max_age": 55
+      }
+    },
+    {
+      "id": "RF_RESP",
+      "name": "Respiratorio Crónico",
+      "description": "Asma moderada/severa, EPOC o fibrosis pulmonar.",
+      "points": 5,
+      "constraints": null
+    },
+    {
+      "id": "RF_METABOLIC",
+      "name": "Metabólico / Vascular",
+      "description": "Diabetes Mellitus o Hipertensión Arterial.",
+      "points": 5,
+      "constraints": null
+    },
+    {
+      "id": "RF_NEURO",
+      "name": "Compromiso Neurológico Previo",
+      "description": "Antecedentes de ACV, epilepsia o demencia.",
+      "points": 5,
+      "constraints": null
+    }
+  ]
+}

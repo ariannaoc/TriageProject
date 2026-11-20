@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resources/Emergencia.png</file>
+        <file>resources/Estetoscopio.png</file>
+        <file>resources/Heart_signovital.png</file>
+        <file>resources/signos_vitales.png</file>
+    </qresource>
+</RCC>

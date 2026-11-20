@@ -1,0 +1,59 @@
+{
+    "triage_levels": [
+      {
+        "level": 1,
+        "roman": "I",
+        "name": "Resucitación / Atención Inmediata",
+        "color_name": "Rojo",
+        "hex_color": "#D32F2F",
+        "min_score": 80,
+        "max_score": 100,
+        "max_wait_minutes": 0,
+        "allow_ambulance": true
+      },
+      {
+        "level": 2,
+        "roman": "II",
+        "name": "Emergencia / Muy Urgente",
+        "color_name": "Naranja",
+        "hex_color": "#F57C00",
+        "min_score": 60,
+        "max_score": 79,
+        "max_wait_minutes": 15,
+        "allow_ambulance": true
+      },
+      {
+        "level": 3,
+        "roman": "III",
+        "name": "Urgente",
+        "color_name": "Amarillo",
+        "hex_color": "#FBC02D",
+        "min_score": 40,
+        "max_score": 59,
+        "max_wait_minutes": 60,
+        "allow_ambulance": false
+      },
+      {
+        "level": 4,
+        "roman": "IV",
+        "name": "Poco Urgente",
+        "color_name": "Verde",
+        "hex_color": "#388E3C",
+        "min_score": 20,
+        "max_score": 39,
+        "max_wait_minutes": 120,
+        "allow_ambulance": false
+      },
+      {
+        "level": 5,
+        "roman": "V",
+        "name": "No Urgente",
+        "color_name": "Azul",
+        "hex_color": "#1976D2",
+        "min_score": 0,
+        "max_score": 19,
+        "max_wait_minutes": 240,
+        "allow_ambulance": false
+      }
+    ]
+}

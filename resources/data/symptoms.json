@@ -1,0 +1,209 @@
+{
+  "categories": [
+    { "id": 1, "name": "Alergias y Piel" },
+    { "id": 2, "name": "Infecciones y Piel Avanzada" },
+    { "id": 3, "name": "Fiebre y Dolor Abdominal" },
+    { "id": 4, "name": "Dolor Torácico y Respiratorio" },
+    { "id": 5, "name": "Traumatismos y Extremidades" },
+    { "id": 6, "name": "Sangrado y Lesiones" },
+    { "id": 7, "name": "Malestar General y Síntomas Leves" }
+  ],
+  "symptoms": [
+    {
+      "id": 101,
+      "category_id": 1,
+      "label": "Lesión cutánea leve / Erupción sin picazón intensa",
+      "base_points": 10,
+      "estimated_level": 5
+    },
+    {
+      "id": 102,
+      "category_id": 1,
+      "label": "Afección en piel (brote, urticaria, sospecha de intoxicación/alergia sin disnea)",
+      "base_points": 25,
+      "estimated_level": 4
+    },
+    {
+      "id": 103,
+      "category_id": 1,
+      "label": "Reacción alérgica moderada (hinchazón facial/labios sin compromiso respiratorio)",
+      "base_points": 45,
+      "estimated_level": 3
+    },
+    {
+      "id": 104,
+      "category_id": 1,
+      "label": "Anafilaxia / Reacción alérgica severa con edema de glotis o disnea",
+      "base_points": 80,
+      "estimated_level": 1
+    },
+    {
+      "id": 201,
+      "category_id": 2,
+      "label": "Pústula / Infección localizada pequeña sin fiebre",
+      "base_points": 10,
+      "estimated_level": 5
+    },
+    {
+      "id": 202,
+      "category_id": 2,
+      "label": "Herida con supuración o signos de infección localizada",
+      "base_points": 25,
+      "estimated_level": 4
+    },
+    {
+      "id": 203,
+      "category_id": 2,
+      "label": "Herida infectada extensa con celulitis o respuesta inflamatoria",
+      "base_points": 45,
+      "estimated_level": 3
+    },
+    {
+      "id": 301,
+      "category_id": 3,
+      "label": "Fiebre moderada (38°C - 38.9°C) sin otros síntomas",
+      "base_points": 15,
+      "estimated_level": 5
+    },
+    {
+      "id": 302,
+      "category_id": 3,
+      "label": "Fiebre alta (>= 39°C) o dolor abdominal moderado",
+      "base_points": 25,
+      "estimated_level": 4
+    },
+    {
+      "id": 303,
+      "category_id": 3,
+      "label": "Cólico abdominal severo / Dolor abdominal agudo e intenso",
+      "base_points": 45,
+      "estimated_level": 3
+    },
+    {
+      "id": 401,
+      "category_id": 4,
+      "label": "Molestia torácica atípica / Palpitaciones",
+      "base_points": 20,
+      "estimated_level": 4
+    },
+    {
+      "id": 402,
+      "category_id": 4,
+      "label": "Dolor torácico moderado / Disnea de esfuerzo",
+      "base_points": 45,
+      "estimated_level": 3
+    },
+    {
+      "id": 403,
+      "category_id": 4,
+      "label": "Dolor torácico opresivo agudo (sospecha de SICA) / Disnea severa en reposo",
+      "base_points": 65,
+      "estimated_level": 2
+    },
+    {
+      "id": 501,
+      "category_id": 5,
+      "label": "Contusión / Torcedura leve",
+      "base_points": 10,
+      "estimated_level": 5
+    },
+    {
+      "id": 502,
+      "category_id": 5,
+      "label": "Torcedura grave / Esguince severo con incapacidad funcional",
+      "base_points": 25,
+      "estimated_level": 4
+    },
+    {
+      "id": 503,
+      "category_id": 5,
+      "label": "Hueso roto (fractura cerrada) / Deformidad articular",
+      "base_points": 45,
+      "estimated_level": 3
+    },
+    {
+      "id": 504,
+      "category_id": 5,
+      "label": "Fractura expuesta o trauma con compromiso vascular",
+      "base_points": 65,
+      "estimated_level": 2
+    },
+    {
+      "id": 505,
+      "category_id": 5,
+      "label": "Mutilación / Amputación traumática de extremidad o parte del cuerpo",
+      "base_points": 85,
+      "estimated_level": 1
+    },
+    {
+      "id": 601,
+      "category_id": 6,
+      "label": "Cortada superficial / Laceración menor",
+      "base_points": 5,
+      "estimated_level": 5
+    },
+    {
+      "id": 602,
+      "category_id": 6,
+      "label": "Laceración moderada que requiere sutura / Sangrado controlado",
+      "base_points": 25,
+      "estimated_level": 4
+    },
+    {
+      "id": 603,
+      "category_id": 6,
+      "label": "Hemorragia activa profusa",
+      "base_points": 45,
+      "estimated_level": 3
+    },
+    {
+      "id": 604,
+      "category_id": 6,
+      "label": "Hemorragia masiva / Inestabilidad hemodinámica",
+      "base_points": 70,
+      "estimated_level": 1
+    },
+    {
+      "id": 701,
+      "category_id": 7,
+      "label": "Síntomas gripales leves / Congestión nasal o dolor de garganta sin dificultad respiratoria",
+      "base_points": 5,
+      "estimated_level": 5
+    },
+    {
+      "id": 702,
+      "category_id": 7,
+      "label": "Febrícula / Fiebre baja (37.5°C - 37.9°C) con malestar general leve",
+      "base_points": 10,
+      "estimated_level": 5
+    },
+    {
+      "id": 703,
+      "category_id": 7,
+      "label": "Dolor de cabeza leve o moderado (cefalea tensional) sin otros signos",
+      "base_points": 10,
+      "estimated_level": 5
+    },
+    {
+      "id": 704,
+      "category_id": 7,
+      "label": "Náuseas leves o malestar estomacal pasajero sin vómitos persistentes",
+      "base_points": 10,
+      "estimated_level": 5
+    },
+    {
+      "id": 705,
+      "category_id": 7,
+      "label": "Mareo leve o sensación de debilidad sin pérdida del conocimiento",
+      "base_points": 15,
+      "estimated_level": 5
+    },
+    {
+      "id": 706,
+      "category_id": 7,
+      "label": "Migraña intensa / Cefalea severa con intolerancia a la luz o náuseas",
+      "base_points": 25,
+      "estimated_level": 4
+    }
+  ]
+}
