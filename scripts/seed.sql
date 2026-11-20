@@ -19,6 +19,15 @@ VALUES
     ('Ambulatorio Urbano Tipo I Arquidiócesano', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector Belén / Centro, Calle 17 entre Av. 2 y 3, Parroquia Arias, Mérida', 8.6015, -71.1410),
     ('Ambulatorio Urbano Tipo I La Carabobo', 'Ambulatorio Urbano Tipo I', 4, 5, 'Sector Cuenca del Chama, Barrio Carabobo, Parroquia Jacinto Plaza, Mérida', 8.5695, -71.1480);
 
+-- Datos operativos para el motor de enrutamiento (max_level es inverso a complejidad)
+UPDATE centers SET
+    nivel_complejidad = 5 - max_level,
+    capacidad_total = capacity,
+    cola_actual = 0;
+
+UPDATE centers SET cola_actual = 12 WHERE center_id = 1;
+UPDATE centers SET cola_actual = 6 WHERE center_id = 2;
+
 -- Limpiar usuarios previos de prueba
 DELETE FROM users;
 DELETE FROM sqlite_sequence WHERE name='users';

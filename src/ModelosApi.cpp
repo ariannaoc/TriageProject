@@ -23,6 +23,10 @@ CentroInfo CentroInfo::fromJson(const QJsonObject& json) {
     centro.location = json.value("location").toString();
     centro.latitude = json.value("latitude").toDouble();
     centro.longitude = json.value("longitude").toDouble();
+    centro.nivelComplejidad = json.value("nivel_complejidad").toInt(centro.maxLevel > 0 ? 5 - centro.maxLevel : 1);
+    centro.capacidadTotal = json.value("capacidad_total").toInt(centro.capacity);
+    centro.capacidadDisponible = json.value("capacidad_disponible").toInt(centro.capacity);
+    centro.colaActual = json.value("cola_actual").toInt(0);
     return centro;
 }
 

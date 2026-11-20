@@ -1,15 +1,18 @@
 #include "FormularioPacienteWidget.hpp"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+
+#include <QDateTime>
+#include <QFile>
 #include <QFormLayout>
 #include <QGroupBox>
-#include <QScrollArea>
-#include <QLabel>
-#include <QMessageBox>
-#include <QFile>
+#include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QJsonParseError>
-#include <QDateTime>
+#include <QMessageBox>
+#include <QScrollArea>
+#include <QStringList>
+#include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace {
 QJsonObject leerCatalogo(const QString& ruta) {
@@ -27,16 +30,61 @@ QJsonObject leerCatalogo(const QString& ruta) {
 }
 
 FormularioPacienteWidget::FormularioPacienteWidget(QWidget* parent)
-    : QWidget(parent), enviando(false) {
+    : QWidget(parent) {
     cargarCatalogos();
+    bosqueTriaje_.construirDesdeCategorias(catalogoCategorias);
+    motorTriaje_ = std::make_unique<MotorTriaje>(bosqueTriaje_, factoresTriaje);
     configurarUI();
     aplicarEstilos();
+    configurarGps();
 }
 
 void FormularioPacienteWidget::cargarCatalogos() {
-    sintomasCatalogo = leerCatalogo(":/resources/data/symptoms.json").value("symptoms").toArray();
+    const QJsonObject sintomasDoc = leerCatalogo(":/resources/data/symptoms.json");
+    const QJsonObject riesgosDoc = leerCatalogo(":/resources/data/risk_factors.json");
     triageNiveles = leerCatalogo(":/resources/data/triage_levels.json").value("triage_levels").toArray();
-    factoresRiesgo = leerCatalogo(":/resources/data/risk_factors.json");
+
+    std::map<int, std::vector<OpcionSintoma>> porCategoria;
+    for (const QJsonValue& entrada : sintomasDoc.value("symptoms").toArray()) {
+        const QJsonObject sintoma = entrada.toObject();
+        OpcionSintoma opcion;
+        opcion.id = sintoma.value("id").toInt();
+        opcion.etiqueta = sintoma.value("label").toString().toStdString();
+        opcion.base_points = sintoma.value("base_points").toInt();
+        int nivel = sintoma.value("estimated_level").toInt();
+        if (nivel < 1 || nivel > 5) {
+            nivel = 5;
+        }
+        opcion.nivel_estimado = static_cast<NivelTriaje>(nivel);
+        porCategoria[sintoma.value("category_id").toInt()].push_back(opcion);
+    }
+
+    catalogoCategorias.clear();
+    for (const QJsonValue& entrada : sintomasDoc.value("categories").toArray()) {
+        const QJsonObject categoria = entrada.toObject();
+        const int id = categoria.value("id").toInt();
+        catalogoCategorias.push_back({id,
+                                      categoria.value("name").toString().toStdString(),
+                                      porCategoria[id]});
+    }
+
+    factoresTriaje.clear();
+    for (const QJsonValue& entrada : riesgosDoc.value("age_risk_rules").toArray()) {
+        const QJsonObject regla = entrada.toObject();
+        factoresTriaje.push_back({regla.value("id").toString().toStdString(),
+                                  regla.value("label").toString().toStdString(),
+                                  regla.value("points").toInt(),
+                                  true,
+                                  regla.value("condition").toString().toStdString()});
+    }
+    for (const QJsonValue& entrada : riesgosDoc.value("risk_factors").toArray()) {
+        const QJsonObject factor = entrada.toObject();
+        factoresTriaje.push_back({factor.value("id").toString().toStdString(),
+                                  factor.value("name").toString().toStdString(),
+                                  factor.value("points").toInt(),
+                                  false,
+                                  ""});
+    }
 }
 
 void FormularioPacienteWidget::configurarUI() {
@@ -66,102 +114,186 @@ void FormularioPacienteWidget::configurarUI() {
 
     auto* grupoPersonales = new QGroupBox("Datos Personales", this);
     auto* formPersonales = new QFormLayout(grupoPersonales);
-
-    comboCentro = new QComboBox(this);
-    comboCentro->addItem("Cargando centros…", -1);
-
     comboSexo = new QComboBox(this);
     comboSexo->addItems({"Seleccionar...", "Femenino", "Masculino"});
     spinEdad = new QSpinBox(this);
     spinEdad->setRange(0, 120);
-
     txtNombre = new QLineEdit(this);
     txtApellido = new QLineEdit(this);
-    txtUbicacion = new QLineEdit(this);
-    txtUbicacion->setPlaceholderText("Ej: Centro, Mérida");
-
-    formPersonales->addRow("Centro de destino:", comboCentro);
-    formPersonales->addRow("Sexo (F/M):", comboSexo);
+    formPersonales->addRow("Sexo:", comboSexo);
     formPersonales->addRow("Edad:", spinEdad);
     formPersonales->addRow("Nombre:", txtNombre);
     formPersonales->addRow("Apellido:", txtApellido);
-    formPersonales->addRow("Ubicación:", txtUbicacion);
     layoutContenido->addWidget(grupoPersonales);
 
-    connect(comboSexo, &QComboBox::currentTextChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
-    connect(spinEdad, &QSpinBox::valueChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
+    auto* grupoUbicacion = new QGroupBox("Ubicación de la emergencia", this);
+    auto* formUbicacion = new QFormLayout(grupoUbicacion);
+    txtUbicacion = new QLineEdit(this);
+    txtUbicacion->setPlaceholderText("Ej: Sector Belén, Mérida");
+    btnUbicacion = new QPushButton("Usar mi ubicación GPS", this);
+    auto* layoutReferencia = new QHBoxLayout();
+    layoutReferencia->addWidget(txtUbicacion);
+    layoutReferencia->addWidget(btnUbicacion);
+    formUbicacion->addRow("Referencia / dirección:", layoutReferencia);
+    lblUbicacionEstado = new QLabel("Ingresa una referencia o usa el GPS; si no hay datos se usará Mérida centro.", this);
+    lblUbicacionEstado->setWordWrap(true);
+    formUbicacion->addRow(lblUbicacionEstado);
+    layoutContenido->addWidget(grupoUbicacion);
 
-    auto* grupoRiesgos = new QGroupBox("Condiciones Previas (Factores de Riesgo)", this);
+    auto* grupoRiesgos = new QGroupBox("Paso 1 - Factores de Riesgo", this);
     auto* layoutRiesgos = new QVBoxLayout(grupoRiesgos);
-
-    chkCardio = new QCheckBox("Cardiovascular Severa (+10 pts): Insuficiencia, infarto, arritmias", this);
-    chkInmuno = new QCheckBox("Inmunosupresión / Cáncer / Anticoagulación (+10 pts)", this);
-    chkRenal = new QCheckBox("Enfermedad Renal Crónica (+10 pts): Diálisis o falla renal", this);
-    chkEmbarazo = new QCheckBox("Embarazo o Postparto (+10 pts)", this);
-    chkEmbarazo->setEnabled(false);
-    chkRespiratorio = new QCheckBox("Respiratorio Crónico (+5 pts): Asma severa, EPOC", this);
-    chkMetabolico = new QCheckBox("Metabólico / Vascular (+5 pts): Diabetes, Hipertensión", this);
-    chkNeuro = new QCheckBox("Compromiso Neurológico Previo (+5 pts): ACV, Epilepsia", this);
-
-    layoutRiesgos->addWidget(chkCardio);
-    layoutRiesgos->addWidget(chkInmuno);
-    layoutRiesgos->addWidget(chkRenal);
-    layoutRiesgos->addWidget(chkEmbarazo);
-    layoutRiesgos->addWidget(chkRespiratorio);
-    layoutRiesgos->addWidget(chkMetabolico);
-    layoutRiesgos->addWidget(chkNeuro);
+    for (const auto& factor : factoresTriaje) {
+        if (factor.esReglaEdad) {
+            layoutRiesgos->addWidget(new QLabel(
+                QString::fromStdString(factor.nombre) +
+                    QString(" (+%1 pts, se aplica automáticamente)").arg(factor.puntos),
+                this));
+        }
+    }
+    const QJsonObject riesgosDoc = leerCatalogo(":/resources/data/risk_factors.json");
+    for (const QJsonValue& entrada : riesgosDoc.value("risk_factors").toArray()) {
+        const QJsonObject factor = entrada.toObject();
+        const QString id = factor.value("id").toString();
+        QString etiqueta = QString("%1 (+%2 pts)")
+                               .arg(factor.value("name").toString())
+                               .arg(factor.value("points").toInt());
+        const QString descripcion = factor.value("description").toString();
+        if (!descripcion.isEmpty()) {
+            etiqueta += ": " + descripcion;
+        }
+        auto* chk = new QCheckBox(etiqueta, this);
+        const QJsonObject restricciones = factor.value("constraints").toObject();
+        chk->setProperty("sexoRequerido", restricciones.value("sex").toString());
+        chk->setProperty("edadMin", restricciones.value("min_age").toInt());
+        chk->setProperty("edadMax", restricciones.value("max_age").toInt());
+        checkFactores[id] = chk;
+        layoutRiesgos->addWidget(chk);
+    }
     layoutContenido->addWidget(grupoRiesgos);
 
-    auto* grupoSintomas = new QGroupBox("Síntomas de la emergencia", this);
-    auto* layoutSintomas = new QVBoxLayout(grupoSintomas);
-    comboSintoma = new QComboBox(this);
-    comboSintoma->addItem("Seleccione un síntoma...", -1);
-    for (const QJsonValue& entrada : sintomasCatalogo) {
-        const QJsonObject sintoma = entrada.toObject();
-        comboSintoma->addItem(sintoma.value("label").toString(), sintoma.value("id").toInt());
+    auto* grupoClinico = new QGroupBox("Paso 2 - Área y Síntomas", this);
+    auto* layoutClinico = new QVBoxLayout(grupoClinico);
+    layoutClinico->addWidget(new QLabel("Área principal de la emergencia:", this));
+    comboCategoria = new QComboBox(this);
+    comboCategoria->addItem("Seleccione un área o categoría...", -1);
+    for (int id : bosqueTriaje_.categorias()) {
+        comboCategoria->addItem(QString::fromStdString(bosqueTriaje_.nombreCategoria(id)), id);
     }
-    layoutSintomas->addWidget(comboSintoma);
-    layoutContenido->addWidget(grupoSintomas);
+    layoutClinico->addWidget(comboCategoria);
+
+    lblGuiaSintomas = new QLabel("Seleccione un área o categoría para ver los síntomas relacionados", this);
+    lblGuiaSintomas->setStyleSheet("color: #bbbbbb; font-style: italic;");
+    layoutClinico->addWidget(lblGuiaSintomas);
+
+    widgetSintomas = new QWidget(this);
+    layoutSintomas = new QVBoxLayout(widgetSintomas);
+    layoutClinico->addWidget(widgetSintomas);
+    widgetSintomas->hide();
+    layoutContenido->addWidget(grupoClinico);
+
+    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
+    auto* grupoDebug = new QGroupBox("Modo Depuración / Prueba (Temporal - Eliminar al integrar BD)", this);
+    grupoDebug->setObjectName("debugGroup");
+    auto* layoutDebug = new QVBoxLayout(grupoDebug);
+    chkForzarCentroDebug = new QCheckBox(
+        "Forzar centro de destino manualmente (omitir asignación automática)", this);
+    comboCentroDebug = new QComboBox(this);
+    comboCentroDebug->addItem("Sin centros disponibles", -1);
+    comboCentroDebug->setEnabled(false);
+    layoutDebug->addWidget(chkForzarCentroDebug);
+    layoutDebug->addWidget(comboCentroDebug);
+    layoutContenido->addWidget(grupoDebug);
+    connect(chkForzarCentroDebug, &QCheckBox::toggled,
+            this, [this](bool marcado) { comboCentroDebug->setEnabled(marcado); });
+    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
 
     lblEstadoFormulario = new QLabel("", this);
     lblEstadoFormulario->setAlignment(Qt::AlignCenter);
     lblEstadoFormulario->setStyleSheet("color: #90caf9; font-size: 13px;");
+    lblEstadoFormulario->setWordWrap(true);
     layoutContenido->addWidget(lblEstadoFormulario);
 
     auto* layoutBotones = new QHBoxLayout();
     btnVolver = new QPushButton("⬅ Volver a Inicio", this);
     btnVolver->setMinimumHeight(45);
-
     btnEvaluar = new QPushButton("Enviar a la cola del centro", this);
     btnEvaluar->setMinimumHeight(45);
-
     layoutBotones->addWidget(btnVolver);
     layoutBotones->addWidget(btnEvaluar);
     layoutContenido->addLayout(layoutBotones);
-
     layoutContenido->addStretch();
+
     scrollArea->setWidget(widgetContenido);
     layoutPrincipal->addWidget(scrollArea);
 
+    connect(comboSexo, &QComboBox::currentTextChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
+    connect(spinEdad, &QSpinBox::valueChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
+    connect(comboCategoria, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &FormularioPacienteWidget::onCategoriaCambiada);
+    connect(btnUbicacion, &QPushButton::clicked, this, &FormularioPacienteWidget::detectarUbicacion);
     connect(btnVolver, &QPushButton::clicked, this, &FormularioPacienteWidget::volverAlMain);
     connect(btnEvaluar, &QPushButton::clicked, this, &FormularioPacienteWidget::enviarFormulario);
 }
 
+void FormularioPacienteWidget::configurarGps() {
+    fuenteGps = QGeoPositionInfoSource::createDefaultSource(this);
+    if (fuenteGps == nullptr) {
+        lblUbicacionEstado->setText("GPS no disponible: ingresa una referencia o se usará Mérida centro.");
+        return;
+    }
+
+    connect(fuenteGps, &QGeoPositionInfoSource::positionUpdated,
+            this, &FormularioPacienteWidget::onPosicionActualizada);
+    connect(fuenteGps, &QGeoPositionInfoSource::errorOccurred, this,
+            [this](QGeoPositionInfoSource::Error) {
+                if (!ubicacionResuelta) {
+                    lblUbicacionEstado->setText("GPS sin señal: ingresa una referencia o se usará Mérida centro.");
+                }
+            });
+    fuenteGps->setUpdateInterval(10000);
+    fuenteGps->startUpdates();
+}
+
+void FormularioPacienteWidget::setApiClient(ApiClient* client) {
+    api = client;
+    connect(api, &ApiClient::geocodificado, this, &FormularioPacienteWidget::onGeocodificado);
+    connect(api, &ApiClient::failed, this, &FormularioPacienteWidget::onErrorGeocodificacion);
+}
+
 void FormularioPacienteWidget::setCentros(const QVector<CentroInfo>& centros) {
-    const int seleccionAnterior = comboCentro->currentData().toInt();
-    comboCentro->clear();
+    std::vector<CentroSalud> cargados;
+    cargados.reserve(static_cast<std::size_t>(centros.size()));
+    for (const CentroInfo& info : centros) {
+        CentroSalud centro;
+        centro.id = info.centerId;
+        centro.nombre = info.name.toStdString();
+        centro.nivel_complejidad = info.nivelComplejidad;
+        centro.capacidad_total = info.capacidadTotal;
+        centro.capacidad_disponible = info.capacidadDisponible;
+        centro.cola_actual = info.colaActual;
+        centro.latitud = info.latitude;
+        centro.longitud = info.longitude;
+        cargados.push_back(centro);
+    }
+    gestorCentros_.cargarCentros(cargados);
 
+    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
+    const int seleccionAnterior = comboCentroDebug->currentData().toInt();
+    comboCentroDebug->clear();
     if (centros.isEmpty()) {
-        comboCentro->addItem("No hay centros disponibles", -1);
+        comboCentroDebug->addItem("Sin centros disponibles", -1);
     }
-    for (const CentroInfo& centro : centros) {
-        comboCentro->addItem(QString("%1 (camas: %2)").arg(centro.name).arg(centro.capacity),
-                             centro.centerId);
+    for (const CentroInfo& info : centros) {
+        comboCentroDebug->addItem(
+            QString("%1 (ID %2, camas: %3)")
+                .arg(info.name)
+                .arg(info.centerId)
+                .arg(info.capacidadDisponible),
+            info.centerId);
     }
-
-    const int indice = comboCentro->findData(seleccionAnterior);
-    if (indice >= 0) {
-        comboCentro->setCurrentIndex(indice);
+    const int indiceAnterior = comboCentroDebug->findData(seleccionAnterior);
+    if (indiceAnterior >= 0) {
+        comboCentroDebug->setCurrentIndex(indiceAnterior);
     }
 }
 
@@ -169,45 +301,166 @@ void FormularioPacienteWidget::setEnviando(bool cargando) {
     enviando = cargando;
     btnEvaluar->setEnabled(!cargando);
     btnEvaluar->setText(cargando ? "Enviando…" : "Enviar a la cola del centro");
-    lblEstadoFormulario->setText(cargando ? "Enviando datos a la API…" : "");
+    lblEstadoFormulario->setText(cargando ? "Enviando datos a la API…" : ultimoEstado);
 }
 
 void FormularioPacienteWidget::verificarEmbarazo() {
-    bool esFemenino = (comboSexo->currentText() == "Femenino");
-    int edad = spinEdad->value();
+    const int indiceSexo = comboSexo->currentIndex();
+    const QString sexo = indiceSexo == 1 ? "F" : (indiceSexo == 2 ? "M" : "");
+    const int edad = spinEdad->value();
 
-    if (esFemenino && edad > 10 && edad < 55) {
-        chkEmbarazo->setEnabled(true);
-    } else {
-        chkEmbarazo->setEnabled(false);
-        chkEmbarazo->setChecked(false);
+    for (auto it = checkFactores.cbegin(); it != checkFactores.cend(); ++it) {
+        QCheckBox* chk = it->second;
+        bool okMin = false;
+        bool okMax = false;
+        const int min = chk->property("edadMin").toInt(&okMin);
+        const int max = chk->property("edadMax").toInt(&okMax);
+        const QString sexoRequerido = chk->property("sexoRequerido").toString();
+
+        bool habilitado = true;
+        if (!sexoRequerido.isEmpty() && sexo != sexoRequerido) {
+            habilitado = false;
+        }
+        if (habilitado && okMin && min > 0 && edad < min) {
+            habilitado = false;
+        }
+        if (habilitado && okMax && max > 0 && edad > max) {
+            habilitado = false;
+        }
+
+        chk->setEnabled(habilitado);
+        if (!habilitado) {
+            chk->setChecked(false);
+        }
     }
 }
 
-int FormularioPacienteWidget::puntosFactor(const QString& id) const {
-    for (const QJsonValue& entrada : factoresRiesgo.value("risk_factors").toArray()) {
-        const QJsonObject factor = entrada.toObject();
-        if (factor.value("id").toString() == id) {
-            return factor.value("points").toInt();
+void FormularioPacienteWidget::reconstruirSintomas() {
+    QLayoutItem* item = nullptr;
+    while ((item = layoutSintomas->takeAt(0)) != nullptr) {
+        if (item->widget() != nullptr) {
+            delete item->widget();
         }
+        delete item;
     }
-    for (const QJsonValue& entrada : factoresRiesgo.value("age_risk_rules").toArray()) {
-        const QJsonObject regla = entrada.toObject();
-        if (regla.value("id").toString() == id) {
-            return regla.value("points").toInt();
-        }
-    }
-    return 0;
+    checkSintomas.clear();
 }
 
-int FormularioPacienteWidget::nivelParaPuntaje(int puntaje) const {
+void FormularioPacienteWidget::onCategoriaCambiada(int indice) {
+    if (categoriaActual >= 0) {
+        seleccionPorCategoria[categoriaActual].clear();
+    }
+
+    const int id = comboCategoria->itemData(indice).toInt();
+    categoriaActual = (indice > 0 && id > 0) ? id : -1;
+    reconstruirSintomas();
+    opcionesCategoriaActual.clear();
+
+    if (categoriaActual < 0) {
+        lblGuiaSintomas->show();
+        widgetSintomas->hide();
+        return;
+    }
+
+    opcionesCategoriaActual = bosqueTriaje_.opcionesCategoria(categoriaActual);
+    lblGuiaSintomas->hide();
+    widgetSintomas->show();
+
+    for (const OpcionSintoma& opcion : opcionesCategoriaActual) {
+        auto* chk = new QCheckBox(
+            QString::fromStdString(opcion.etiqueta) +
+                QString(" (+%1 pts)").arg(opcion.base_points),
+            widgetSintomas);
+        layoutSintomas->addWidget(chk);
+        checkSintomas[opcion.id] = chk;
+        const int idOpcion = opcion.id;
+        connect(chk, &QCheckBox::toggled, this, [this, idOpcion](bool marcado) {
+            auto& ids = seleccionPorCategoria[categoriaActual];
+            if (marcado) {
+                if (std::find(ids.begin(), ids.end(), idOpcion) == ids.end()) {
+                    ids.push_back(idOpcion);
+                }
+            } else {
+                ids.erase(std::remove(ids.begin(), ids.end(), idOpcion), ids.end());
+            }
+        });
+    }
+}
+
+void FormularioPacienteWidget::detectarUbicacion() {
+    if (fuenteGps == nullptr) {
+        lblUbicacionEstado->setText("GPS no disponible: ingresa una referencia o se usará Mérida centro.");
+        return;
+    }
+    lblUbicacionEstado->setText("Buscando señal GPS…");
+    fuenteGps->requestUpdate(8000);
+}
+
+void FormularioPacienteWidget::onPosicionActualizada(const QGeoPositionInfo& info) {
+    const QGeoCoordinate coord = info.coordinate();
+    if (!coord.isValid()) {
+        return;
+    }
+    latPaciente = coord.latitude();
+    lngPaciente = coord.longitude();
+    ubicacionResuelta = true;
+    lblUbicacionEstado->setText(QString("Ubicación GPS obtenida: %1, %2")
+                                    .arg(latPaciente, 0, 'f', 6)
+                                    .arg(lngPaciente, 0, 'f', 6));
+}
+
+void FormularioPacienteWidget::onGeocodificado(double latitud, double longitud) {
+    esperandoGeocodificacion = false;
+    latPaciente = latitud;
+    lngPaciente = longitud;
+    ubicacionResuelta = true;
+    lblUbicacionEstado->setText(QString("Ubicación resuelta: %1, %2")
+                                    .arg(latPaciente, 0, 'f', 6)
+                                    .arg(lngPaciente, 0, 'f', 6));
+    enviarFormulario();
+}
+
+void FormularioPacienteWidget::onErrorGeocodificacion(const QString& operacion, const QString& mensaje) {
+    if (operacion != "geocode" || !esperandoGeocodificacion) {
+        return;
+    }
+    (void)mensaje;
+    esperandoGeocodificacion = false;
+    ubicacionResuelta = true;
+    lblUbicacionEstado->setText("No se pudo geocodificar la referencia; se usa Mérida centro.");
+    enviarFormulario();
+}
+
+bool FormularioPacienteWidget::resolveUbicacion() {
+    if (ubicacionResuelta) {
+        return true;
+    }
+
+    const QString referencia = txtUbicacion->text().trimmed();
+    if (!referencia.isEmpty() && api != nullptr && !esperandoGeocodificacion) {
+        esperandoGeocodificacion = true;
+        lblUbicacionEstado->setText("Resolviendo la dirección ingresada…");
+        api->geocodeAddress(referencia);
+        return false;
+    }
+
+    latPaciente = 8.5839;
+    lngPaciente = -71.1578;
+    ubicacionResuelta = true;
+    lblUbicacionEstado->setText("Ubicación no resuelta: se usa Mérida centro como referencia.");
+    return true;
+}
+
+bool FormularioPacienteWidget::allowAmbulancia(NivelTriaje nivel) const {
+    const bool porDefecto = nivel <= NivelTriaje::II;
     for (const QJsonValue& entrada : triageNiveles) {
-        const QJsonObject nivel = entrada.toObject();
-        if (puntaje >= nivel.value("min_score").toInt() && puntaje <= nivel.value("max_score").toInt()) {
-            return nivel.value("level").toInt();
+        const QJsonObject objeto = entrada.toObject();
+        if (objeto.value("level").toInt() == static_cast<int>(nivel)) {
+            const QJsonValue valor = objeto.value("allow_ambulance");
+            return valor.isBool() ? valor.toBool() : porDefecto;
         }
     }
-    return 5;
+    return porDefecto;
 }
 
 void FormularioPacienteWidget::enviarFormulario() {
@@ -215,67 +468,132 @@ void FormularioPacienteWidget::enviarFormulario() {
         return;
     }
 
-    const int centroId = comboCentro->currentData().toInt();
-    const int idSintoma = comboSintoma->currentData().toInt();
     const QString nombre = txtNombre->text().trimmed();
     const QString apellido = txtApellido->text().trimmed();
     const int edad = spinEdad->value();
-
-    if (centroId <= 0 || idSintoma <= 0 || nombre.isEmpty() || apellido.isEmpty()
-        || edad <= 0 || comboSexo->currentIndex() <= 0) {
+    if (nombre.isEmpty() || apellido.isEmpty() || edad <= 0 ||
+        comboAfectado->currentIndex() <= 0 || comboSexo->currentIndex() <= 0) {
         QMessageBox::warning(this, "Datos incompletos",
-            "Seleccione centro, sexo y síntoma, e ingrese nombre, apellido y edad.");
+                             "Complete quién tuvo la emergencia, nombre, apellido, edad y sexo.");
         return;
     }
 
-    QJsonObject sintomaSeleccionado;
-    for (const QJsonValue& entrada : sintomasCatalogo) {
-        const QJsonObject sintoma = entrada.toObject();
-        if (sintoma.value("id").toInt() == idSintoma) {
-            sintomaSeleccionado = sintoma;
-            break;
+    if (categoriaActual < 0 || checkSintomas.empty()) {
+        QMessageBox::warning(this, "Datos incompletos",
+                             "Seleccione un área principal y al menos un síntoma de esa rama.");
+        return;
+    }
+
+    std::vector<int> idsSintomas;
+    for (const auto& [id, chk] : checkSintomas) {
+        if (chk->isChecked()) {
+            idsSintomas.push_back(id);
+        }
+    }
+    seleccionPorCategoria.clear();
+    if (!idsSintomas.empty()) {
+        seleccionPorCategoria[categoriaActual] = idsSintomas;
+    }
+    if (!bosqueTriaje_.tieneSintomasSeleccionados(seleccionPorCategoria)) {
+        QMessageBox::warning(this, "Sin síntomas",
+                             "Marque al menos un síntoma del área seleccionada para evaluar el triaje.");
+        return;
+    }
+
+    if (!resolveUbicacion()) {
+        return;
+    }
+
+    std::vector<std::string> idsFactoresActivos;
+    for (const auto& [id, chk] : checkFactores) {
+        if (chk->isChecked()) {
+            idsFactoresActivos.push_back(id.toStdString());
         }
     }
 
-    int puntaje = sintomaSeleccionado.value("base_points").toInt();
-    QJsonArray factores;
-    auto agregarFactor = [this, &puntaje, &factores](const QString& id) {
-        puntaje += puntosFactor(id);
-        factores.append(id);
-    };
+    const char sexo = comboSexo->currentIndex() == 1 ? 'F' : 'M';
+    const ResultadoTriaje resTriaje = motorTriaje_->evaluar(
+        seleccionPorCategoria, edad, sexo, idsFactoresActivos);
+    if (resTriaje.sin_sintomas) {
+        QMessageBox::warning(this, "Sin síntomas", "No hay síntomas válidos para evaluar.");
+        return;
+    }
 
-    if (chkCardio->isChecked()) agregarFactor("RF_CARDIO");
-    if (chkInmuno->isChecked()) agregarFactor("RF_INMUNO");
-    if (chkRenal->isChecked()) agregarFactor("RF_RENAL");
-    if (chkEmbarazo->isChecked()) agregarFactor("RF_PREGNANCY");
-    if (chkRespiratorio->isChecked()) agregarFactor("RF_RESP");
-    if (chkMetabolico->isChecked()) agregarFactor("RF_METABOLIC");
-    if (chkNeuro->isChecked()) agregarFactor("RF_NEURO");
-    if (edad < 5) agregarFactor("AGE_INFANT");
-    if (edad > 65) agregarFactor("AGE_ELDERLY");
+    const ResultadoEnrutamiento resRuta = motorEnrutamiento_.recomendar(
+        resTriaje, latPaciente, lngPaciente, gestorCentros_);
 
-    puntaje = qMin(100, puntaje);
-    const int nivel = nivelParaPuntaje(puntaje);
+    int centroAsignado = resRuta.centro_recomendado.id;
+    QString nombreCentro = QString::fromStdString(resRuta.centro_recomendado.nombre);
+    double scoreRuta = resRuta.score;
 
-    QJsonArray idsSintomas;
-    idsSintomas.append(idSintoma);
+    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
+    const bool forzarCentroDebug = chkForzarCentroDebug->isChecked();
+    if (!forzarCentroDebug && resRuta.sin_centro_disponible) {
+        QMessageBox::warning(this, "Sin centro disponible",
+            QString("No hay un centro de salud apto para el nivel de triaje %1. "
+                    "Coordenadas usadas: lat=%2, lng=%3. "
+                    "Revise la ubicación o los datos geográficos de los centros.")
+                .arg(QString::fromStdString(to_string(resTriaje.nivel_final)))
+                .arg(latPaciente, 0, 'f', 6)
+                .arg(lngPaciente, 0, 'f', 6));
+        return;
+    }
+    if (forzarCentroDebug) {
+        centroAsignado = comboCentroDebug->currentData().toInt();
+        if (centroAsignado <= 0) {
+            QMessageBox::warning(this, "Centro de prueba inválido",
+                                 "Seleccione un centro válido en el modo depuración.");
+            return;
+        }
+        nombreCentro = comboCentroDebug->currentText();
+    }
+    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
+
+    const int nivel = static_cast<int>(resTriaje.nivel_final);
+    const int puntaje = resTriaje.puntuacion_categoria_ganadora +
+                        resTriaje.puntuacion_factores_riesgo;
+
+    QJsonArray sintomasJson;
+    QStringList etiquetasSintomas;
+    for (int id : idsSintomas) {
+        sintomasJson.append(id);
+        auto it = std::find_if(opcionesCategoriaActual.begin(), opcionesCategoriaActual.end(),
+                               [id](const OpcionSintoma& opcion) { return opcion.id == id; });
+        if (it != opcionesCategoriaActual.end()) {
+            etiquetasSintomas.append(QString::fromStdString(it->etiqueta));
+        }
+    }
+    QJsonArray factoresJson;
+    for (const std::string& id : idsFactoresActivos) {
+        factoresJson.append(QString::fromStdString(id));
+    }
 
     QJsonObject datos;
-    datos["center_id"] = centroId;
+    datos["center_id"] = centroAsignado;
+    datos["center_name"] = nombreCentro;
+    datos["route_score"] = scoreRuta;
     datos["first_name"] = nombre;
     datos["last_name"] = apellido;
     datos["age"] = edad;
-    datos["sex"] = comboSexo->currentText() == "Femenino" ? "F" : "M";
+    datos["sex"] = sexo == 'F' ? "F" : "M";
     datos["triage_level"] = nivel;
     datos["triage_score"] = puntaje;
-    datos["symptoms"] = sintomaSeleccionado.value("label").toString();
-    datos["symptom_ids"] = idsSintomas;
-    datos["risk_factor_ids"] = factores;
-    datos["ambulance_requested"] = nivel <= 2;
+    datos["winning_category"] = QString::fromStdString(resTriaje.categoria_ganadora);
+    datos["symptoms"] = etiquetasSintomas.join(" | ");
+    datos["symptom_ids"] = sintomasJson;
+    datos["risk_factor_ids"] = factoresJson;
+    datos["ambulance_requested"] = allowAmbulancia(resTriaje.nivel_final);
     datos["location"] = txtUbicacion->text().trimmed();
+    datos["latitude"] = latPaciente;
+    datos["longitude"] = lngPaciente;
     datos["source"] = "SYSTEM";
     datos["created_at"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
+    ultimoEstado = QString("Triaje %1 (%2 pts) · Centro asignado: %3")
+                       .arg(QString::fromStdString(to_string(resTriaje.nivel_final)))
+                       .arg(puntaje)
+                       .arg(nombreCentro);
+    lblEstadoFormulario->setText(ultimoEstado);
     setEnviando(true);
     emit pacienteListo(datos);
 }
@@ -285,11 +603,13 @@ void FormularioPacienteWidget::aplicarEstilos() {
         "QWidget { background-color: #2b2b2b; color: #ffffff; font-size: 14px; }"
         "QGroupBox { font-weight: bold; border: 1px solid #555555; border-radius: 6px; margin-top: 12px; }"
         "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; color: #90caf9; }"
+        // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
+        "QGroupBox#debugGroup { border: 1px dotted #ffb300; background-color: #3a3326; }"
+        "QGroupBox#debugGroup::title { color: #ffb300; }"
         "QLineEdit, QSpinBox, QComboBox { background-color: #3c3c3c; border: 1px solid #555; border-radius: 4px; padding: 6px; color: white; }"
         "QCheckBox { padding: 4px; }"
         "QCheckBox::indicator { width: 18px; height: 18px; }"
-        "QCheckBox:disabled { color: #777777; }"
-    );
+        "QCheckBox:disabled { color: #777777; }");
 
     btnEvaluar->setStyleSheet("QPushButton { background-color: #d32f2f; color: white; font-weight: bold; border-radius: 6px; }"
                               "QPushButton:hover { background-color: #b71c1c; }");

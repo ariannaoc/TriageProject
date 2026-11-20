@@ -27,6 +27,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
 
     configurarVistaMain();
     configurarVistaPacientePlaceholder();
+    vistaModuloPaciente->setApiClient(api);
 
     vistaLoginCentro = new LoginWidget(api, &arbolCentros, this);
     pilaVistas->addWidget(vistaLoginCentro);

@@ -7,7 +7,10 @@ CREATE TABLE IF NOT EXISTS centers (
     capacity INTEGER NOT NULL CHECK(capacity >= 0),
     location TEXT NOT NULL,
     latitude REAL NOT NULL,
-    longitude REAL NOT NULL
+    longitude REAL NOT NULL,
+    nivel_complejidad INTEGER CHECK(nivel_complejidad BETWEEN 1 AND 4),
+    capacidad_total INTEGER CHECK(capacidad_total >= 0),
+    cola_actual INTEGER NOT NULL DEFAULT 0
 );
 
 -- USERS

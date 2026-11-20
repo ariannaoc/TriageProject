@@ -12,7 +12,7 @@ set(CMAKE_AUTOUIC ON)
 
 # Buscar librerias
 find_package(Designar REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network Positioning)
 find_package(SQLite3 REQUIRED)
 find_package(OpenSSL REQUIRED)
 
@@ -52,6 +52,7 @@ target_link_libraries(TriageProject PRIVATE
     Qt6::Widgets
     Qt6::Sql
     Qt6::Network
+    Qt6::Positioning
 )
 
 # Servidor API REST

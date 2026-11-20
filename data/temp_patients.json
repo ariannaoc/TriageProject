@@ -100,6 +100,28 @@
       "symptoms": "Dolor torácico opresivo agudo (sospecha de SICA) / Disnea severa en reposo",
       "triage_level": 2,
       "triage_score": 75
+    },
+    {
+      "age": 20,
+      "ambulance_requested": true,
+      "center_id": 1,
+      "created_at": "2026-11-20T16:31:01Z",
+      "first_name": "Carmen",
+      "id": 203,
+      "last_name": "Perez",
+      "location": "",
+      "risk_factor_ids": [
+        "RF_PREGNANCY",
+        "RF_RESP"
+      ],
+      "sex": "F",
+      "source": "SYSTEM",
+      "symptom_ids": [
+        303
+      ],
+      "symptoms": "Cólico abdominal severo / Dolor abdominal agudo e intenso",
+      "triage_level": 2,
+      "triage_score": 60
     }
   ]
 }

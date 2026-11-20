@@ -112,6 +112,48 @@ int contarCentros(sqlite3* db) {
     return total;
 }
 
+bool tieneColumna(sqlite3* db, const char* tabla, const char* columna) {
+    const std::string sql = std::string("PRAGMA table_info(") + tabla + ");";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+    bool existe = false;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const auto* nombre = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        if (nombre != nullptr && std::string(nombre) == columna) {
+            existe = true;
+            break;
+        }
+    }
+    sqlite3_finalize(stmt);
+    return existe;
+}
+
+void migrarColumnasCentros(sqlite3* db) {
+    struct Columna { const char* nombre; const char* ddl; };
+    const Columna columnas[] = {
+        {"nivel_complejidad", "ALTER TABLE centers ADD COLUMN nivel_complejidad INTEGER CHECK(nivel_complejidad BETWEEN 1 AND 4);"},
+        {"capacidad_total", "ALTER TABLE centers ADD COLUMN capacidad_total INTEGER CHECK(capacidad_total >= 0);"},
+        {"cola_actual", "ALTER TABLE centers ADD COLUMN cola_actual INTEGER NOT NULL DEFAULT 0;"}
+    };
+    for (const auto& columna : columnas) {
+        if (tieneColumna(db, "centers", columna.nombre)) {
+            continue;
+        }
+        char* error = nullptr;
+        if (sqlite3_exec(db, columna.ddl, nullptr, nullptr, &error) != SQLITE_OK) {
+            std::cerr << "No se pudo migrar " << columna.nombre << ": "
+                      << (error != nullptr ? error : sqlite3_errmsg(db)) << std::endl;
+            sqlite3_free(error);
+        } else {
+            std::cout << "Columna migrada en centers: " << columna.nombre << std::endl;
+        }
+    }
+    sqlite3_exec(db, "UPDATE centers SET nivel_complejidad = 5 - max_level WHERE nivel_complejidad IS NULL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "UPDATE centers SET capacidad_total = capacity WHERE capacidad_total IS NULL;", nullptr, nullptr, nullptr);
+}
+
 bool ejecutarSql(sqlite3* db, const fs::path& archivo, std::string& mensajeError) {
     std::ifstream entrada(archivo);
     if (!entrada.is_open()) {
@@ -162,6 +204,8 @@ bool inicializarBase(const fs::path& rutaDb, const fs::path& directorioDatos, co
         }
         std::cout << "Esquema inicializado desde " << script.string() << std::endl;
     }
+
+    migrarColumnasCentros(db);
 
     if (contarCentros(db) == 0) {
         const fs::path semilla = buscarScript(directorioDatos, raiz, "seed.sql");
@@ -317,7 +361,8 @@ int main(int argc, char* argv[])
             return;
         }
 
-        const char* sql = "SELECT center_id, name, type, max_level, capacity, location, latitude, longitude FROM centers;";
+        const char* sql = "SELECT center_id, name, type, max_level, capacity, location, latitude, longitude, "
+                          "nivel_complejidad, capacidad_total, cola_actual FROM centers;";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
 
@@ -331,7 +376,11 @@ int main(int argc, char* argv[])
                 {"capacity", sqlite3_column_int(stmt, 4)},
                 {"location", reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5))},
                 {"latitude", sqlite3_column_double(stmt, 6)},
-                {"longitude", sqlite3_column_double(stmt, 7)}
+                {"longitude", sqlite3_column_double(stmt, 7)},
+                {"nivel_complejidad", sqlite3_column_int(stmt, 8)},
+                {"capacidad_total", sqlite3_column_int(stmt, 9)},
+                {"capacidad_disponible", sqlite3_column_int(stmt, 4)},
+                {"cola_actual", sqlite3_column_int(stmt, 10)}
             });
         }
 
