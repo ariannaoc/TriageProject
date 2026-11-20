@@ -20,6 +20,15 @@ include_directories(include)
 
 # Cliente
 qt_add_executable(TriageProject
+    src/BosqueTriaje.cpp
+    src/MotorTriaje.cpp
+    src/GestorCentros.cpp
+    src/MotorEnrutamiento.cpp
+    include/modelos_triaje.hpp
+    include/BosqueTriaje.hpp
+    include/MotorTriaje.hpp
+    include/GestorCentros.hpp
+    include/MotorEnrutamiento.hpp
     src/main.cpp
     src/MainWindow.cpp
     src/LoginWidget.cpp
@@ -57,3 +66,13 @@ target_link_libraries(triage_api PRIVATE
     OpenSSL::Crypto
     pthread
 )
+
+# Target de pruebas del motor de triaje y enrutamiento (sin Qt)
+add_executable(test_motores
+    tests/test_motores.cpp
+    src/BosqueTriaje.cpp
+    src/MotorTriaje.cpp
+    src/GestorCentros.cpp
+    src/MotorEnrutamiento.cpp
+)
+target_link_libraries(test_motores PRIVATE Designar::Designar)
