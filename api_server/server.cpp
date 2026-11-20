@@ -361,6 +361,12 @@ int main(int argc, char* argv[])
              {
         try {
             auto new_p = json::parse(req.body);
+            if (!new_p.contains("latitud") || !new_p["latitud"].is_number()) {
+                new_p["latitud"] = 8.5897;
+            }
+            if (!new_p.contains("longitud") || !new_p["longitud"].is_number()) {
+                new_p["longitud"] = -71.1561;
+            }
             std::lock_guard<std::mutex> lock(json_mutex);
 
             json data = readTempPatients();
