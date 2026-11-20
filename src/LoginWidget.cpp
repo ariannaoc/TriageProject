@@ -1,14 +1,31 @@
 #include "LoginWidget.hpp"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+#include "ApiClient.hpp"
+#include <QComboBox>
 #include <QFormLayout>
+#include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QSpinBox>
+#include <QTabWidget>
+#include <QVBoxLayout>
 #include <QCryptographicHash>
 
-LoginWidget::LoginWidget(AVLTree<CredencialCentro>* repo, QWidget* parent)
-    : QWidget(parent), repositorioCentros(repo) {
+LoginWidget::LoginWidget(ApiClient* api, AVLTree<CredencialCentro>* repo, QWidget* parent)
+    : QWidget(parent), api(api), repositorioCentros(repo), esperandoLogin(false) {
     configurarUI();
+
+    connect(api, &ApiClient::loginOk, this, &LoginWidget::onLoginOk);
+    connect(api, &ApiClient::requestStarted, this, [this](const QString& operation) {
+        if (operation == "login") {
+            esperandoLogin = true;
+            setLoginLoading(true);
+        }
+    });
+    connect(api, &ApiClient::failed, this, &LoginWidget::onRequestFailed);
+    connect(api, &ApiClient::requestFinished, this, &LoginWidget::onRequestFinished);
 }
 
 void LoginWidget::configurarUI() {
@@ -44,17 +61,22 @@ void LoginWidget::configurarUI() {
     formLogin->addRow("Usuario del Centro:", inputLoginUser);
     formLogin->addRow("Contraseña:", inputLoginPass);
 
-    auto* btnEntrar = new QPushButton("Iniciar Sesión", this);
+    btnEntrar = new QPushButton("Iniciar Sesión", this);
     btnEntrar->setMinimumHeight(42);
     btnEntrar->setStyleSheet("background-color: #1976d2; color: white; font-weight: bold; border-radius: 6px;");
 
-    auto* notaPrueba = new QLabel("Usuario de prueba precargado: <b>iahula</b> | Contraseña: <b>1234</b>", this);
+    auto* notaPrueba = new QLabel("Usuario API de prueba: <b>iahula_admin</b> | Contraseña: <b>admin123</b>", this);
     notaPrueba->setStyleSheet("color: #ffffff; font-size: 12px;");
+
+    lblEstadoLogin = new QLabel("", this);
+    lblEstadoLogin->setAlignment(Qt::AlignCenter);
+    lblEstadoLogin->setStyleSheet("color: #90caf9; font-size: 12px;");
 
     layoutLogin->addSpacing(15);
     layoutLogin->addLayout(formLogin);
     layoutLogin->addSpacing(10);
     layoutLogin->addWidget(btnEntrar);
+    layoutLogin->addWidget(lblEstadoLogin);
     layoutLogin->addWidget(notaPrueba);
     layoutLogin->addStretch();
 
@@ -141,21 +163,34 @@ void LoginWidget::procesarLogin() {
         return;
     }
 
-    // Hash SHA-256 de la contraseña ingresada
-    QString passHash = QString(QCryptographicHash::hash(pass.toUtf8(), QCryptographicHash::Sha256).toHex());
+    api->login(user, pass);
+}
 
-    // Búsqueda en O(log N) dentro del AVLTree de DeSiGNAR
-    CredencialCentro criterioBusqueda{user.toStdString(), "", "", "", 0, 0};
-    auto* nodoEncontrado = repositorioCentros->search(criterioBusqueda);
+void LoginWidget::setLoginLoading(bool cargando) {
+    btnEntrar->setEnabled(!cargando);
+    btnEntrar->setText(cargando ? "Iniciando sesión…" : "Iniciar Sesión");
+    lblEstadoLogin->setText(cargando ? "Conectando con la API…" : "");
+}
 
-    if (nodoEncontrado != nullptr && nodoEncontrado->password_hash == passHash.toStdString()) {
+void LoginWidget::onLoginOk(const SesionCentro& sesion) {
+    esperandoLogin = false;
     inputLoginPass->clear();
-    emit loginExitoso(*nodoEncontrado);
-    }
+    emit loginExitoso(sesion);
+}
 
-   else {
-        QMessageBox::critical(this, "Error de Autenticación", "Usuario o contraseña incorrectos.");
+void LoginWidget::onRequestFailed(const QString& operation, const QString& message) {
+    if (operation != "login" || !esperandoLogin) {
+        return;
     }
+    esperandoLogin = false;
+    QMessageBox::critical(this, "Error de autenticación", message);
+}
+
+void LoginWidget::onRequestFinished() {
+    if (esperandoLogin) {
+        return;
+    }
+    setLoginLoading(false);
 }
 
 void LoginWidget::procesarRegistro() {
@@ -188,7 +223,8 @@ void LoginWidget::procesarRegistro() {
 
     repositorioCentros->insert(nuevaCredencial);
     QMessageBox::information(this, "Registro Exitoso",
-        "El centro '" + nombre + "' ha sido registrado en el árbol AVL de DeSiGNAR.\nAhora puede iniciar sesión.");
+        "El centro '" + nombre + "' se registró solo en el árbol AVL local de DeSiGNAR.\n"
+        "No crea un usuario en la API; use las credenciales del seed para iniciar sesión.");
 
     inputRegNombreCentro->clear();
     inputRegUser->clear();

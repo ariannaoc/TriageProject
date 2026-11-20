@@ -5,18 +5,25 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QPushButton>
+#include <QLabel>
+#include <QJsonArray>
+#include <QJsonObject>
+#include "ModelosApi.hpp"
 
 class FormularioPacienteWidget : public QWidget {
     Q_OBJECT
 
 public:
     explicit FormularioPacienteWidget(QWidget* parent = nullptr);
+    void setCentros(const QVector<CentroInfo>& centros);
+    void setEnviando(bool enviando);
 
 signals:
     void volverAlMain();
-    void iniciarEvaluacion(); // Se usará cuando el Árbol exista
+    void pacienteListo(const QJsonObject& datos);
 
 private:
+    QComboBox* comboCentro;
     QComboBox* comboAfectado;
     QComboBox* comboSexo;
     QSpinBox* spinEdad;
@@ -33,13 +40,23 @@ private:
     QCheckBox* chkNeuro;
 
     QComboBox* comboSintoma;
+    QLabel* lblEstadoFormulario;
 
     QPushButton* btnEvaluar;
     QPushButton* btnVolver;
 
+    QJsonArray sintomasCatalogo;
+    QJsonArray triageNiveles;
+    QJsonObject factoresRiesgo;
+    bool enviando;
+
     void configurarUI();
     void aplicarEstilos();
+    void cargarCatalogos();
+    int puntosFactor(const QString& id) const;
+    int nivelParaPuntaje(int puntaje) const;
 
 private slots:
     void verificarEmbarazo();
+    void enviarFormulario();
 };

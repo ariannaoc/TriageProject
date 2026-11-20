@@ -26,11 +26,15 @@ qt_add_executable(TriageProject
     src/VistaMain.cpp
     src/VistaMain.ui
     src/FormularioPacienteWidget.cpp
+    src/ApiClient.cpp
+    src/ModelosApi.cpp
     include/MainWindow.hpp
     include/LoginWidget.hpp
     include/VistaMain.hpp
     include/ModelosCentro.hpp
     include/FormularioPacienteWidget.hpp
+    include/ApiClient.hpp
+    include/ModelosApi.hpp
     recursos.qrc
 )
 
