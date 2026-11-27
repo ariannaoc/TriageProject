@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <QResizeEvent>
 
 namespace Ui { class VistaMain; }
 
@@ -15,4 +16,7 @@ signals:
 
 private:
     Ui::VistaMain* ui;
+    
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 };

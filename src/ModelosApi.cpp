@@ -42,3 +42,30 @@ PacienteTemp PacienteTemp::fromJson(const QJsonObject& json) {
     paciente.symptoms = json.value("symptoms").toString();
     return paciente;
 }
+
+PacienteIngresado PacienteIngresado::fromJson(const QJsonObject& json) {
+    PacienteIngresado paciente;
+    paciente.patientId = json.value("patient_id").toInt();
+    paciente.cedula = json.value("cedula").toString();
+    paciente.firstName = json.value("first_name").toString();
+    paciente.lastName = json.value("last_name").toString();
+    paciente.age = json.value("age").toInt();
+    paciente.triageLevel = json.value("triage_level").toInt();
+    paciente.triageScore = json.value("triage_score").toInt();
+    paciente.symptoms = json.value("symptoms").toString();
+    paciente.status = json.value("status").toString();
+    paciente.admissionDate = json.value("admission_date").toString();
+    return paciente;
+}
+
+DatoTendencia DatoTendencia::fromJson(const QJsonObject& json) {
+    DatoTendencia dato;
+    dato.fecha = QDate::fromString(json.value("date").toString(), Qt::ISODate);
+    dato.nivelI = json.value("level_1").toInt();
+    dato.nivelII = json.value("level_2").toInt();
+    dato.nivelIII = json.value("level_3").toInt();
+    dato.nivelIV = json.value("level_4").toInt();
+    dato.nivelV = json.value("level_5").toInt();
+    dato.total = json.value("total").toInt();
+    return dato;
+}
