@@ -39,6 +39,24 @@ void ApiClient::fetchPendingPatients(int centerId) {
     prepareReply(reply, "pending");
 }
 
+void ApiClient::fetchAdmittedPatients(int centerId) {
+    QNetworkRequest request(endpoint(QString("/api/centers/%1/admitted").arg(centerId)));
+    QNetworkReply* reply = manager.get(request);
+    reply->setProperty("centerId", centerId);
+    prepareReply(reply, "admitted");
+}
+
+void ApiClient::fetchTrends(int centerId, int days) {
+    QUrl url = endpoint(QString("/api/centers/%1/trends").arg(centerId));
+    QUrlQuery query;
+    query.addQueryItem("days", QString::number(qBound(1, days, 90)));
+    url.setQuery(query);
+    QNetworkRequest request(url);
+    QNetworkReply* reply = manager.get(request);
+    reply->setProperty("centerId", centerId);
+    prepareReply(reply, "trends");
+}
+
 void ApiClient::createTempPatient(const QJsonObject& patient) {
     postJson("/api/temp-patients", patient, "create");
 }
@@ -53,20 +71,9 @@ void ApiClient::dischargePatient(int centerId, const QString& cedula) {
              QJsonObject{}, "discharge");
 }
 
-void ApiClient::geocodeAddress(const QString& direccion) {
-    QUrl url(QStringLiteral("https://nominatim.openstreetmap.org/search"));
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("q"), direccion.trimmed() + QStringLiteral(", Mérida, Venezuela"));
-    query.addQueryItem(QStringLiteral("format"), QStringLiteral("jsonv2"));
-    query.addQueryItem(QStringLiteral("limit"), QStringLiteral("1"));
-    query.addQueryItem(QStringLiteral("bounded"), QStringLiteral("1"));
-    query.addQueryItem(QStringLiteral("viewbox"), QStringLiteral("-71.30,8.70,-70.95,8.45"));
-    url.setQuery(query);
-
-    QNetworkRequest request(url);
-    request.setRawHeader("User-Agent", "TriageProject/1.0 (Qt desktop client)");
-    request.setRawHeader("Accept", "application/json");
-    prepareReply(manager.get(request), "geocode");
+void ApiClient::dischargePatientById(int centerId, int patientId) {
+    postJson(QString("/api/centers/%1/discharge-id/%2").arg(centerId).arg(patientId),
+             QJsonObject{}, "discharge-id");
 }
 
 QUrl ApiClient::endpoint(const QString& path) const {
@@ -136,26 +143,6 @@ void ApiClient::onFinished(QNetworkReply* reply) {
         return;
     }
 
-    if (operation == "geocode") {
-        if (doc.isArray() && !doc.array().isEmpty()) {
-            const QJsonObject primero = doc.array().first().toObject();
-            bool okLat = false;
-            bool okLng = false;
-            const double lat = primero.value(QStringLiteral("lat")).toString().toDouble(&okLat);
-            const double lng = primero.value(QStringLiteral("lon")).toString().toDouble(&okLng);
-            if (okLat && okLng) {
-                emit geocodificado(lat, lng);
-            } else {
-                emit failed("geocode", "No se pudo interpretar la ubicación devuelta.");
-            }
-        } else {
-            emit failed("geocode", "No se encontró la dirección ingresada.");
-        }
-        emit requestFinished();
-        reply->deleteLater();
-        return;
-    }
-
     const QJsonObject body = doc.object();
     if (status < 200 || status >= 300) {
         fail(reply, errorMessage(body, status, "Error inesperado del servidor"));
@@ -183,11 +170,23 @@ void ApiClient::onFinished(QNetworkReply* reply) {
             pacientes.append(PacienteTemp::fromJson(item.toObject()));
         }
         emit pendingLoaded(reply->property("centerId").toInt(), pacientes);
+    } else if (operation == "admitted") {
+        QVector<PacienteIngresado> pacientes;
+        for (const QJsonValue& item : body.value("patients").toArray()) {
+            pacientes.append(PacienteIngresado::fromJson(item.toObject()));
+        }
+        emit admittedLoaded(reply->property("centerId").toInt(), pacientes);
+    } else if (operation == "trends") {
+        QVector<DatoTendencia> tendencias;
+        for (const QJsonValue& item : body.value("trends").toArray()) {
+            tendencias.append(DatoTendencia::fromJson(item.toObject()));
+        }
+        emit trendsLoaded(reply->property("centerId").toInt(), tendencias);
     } else if (operation == "create") {
         emit operationOk("Paciente registrado en la cola del centro.");
     } else if (operation == "admit") {
         emit operationOk("Paciente admitido correctamente.");
-    } else if (operation == "discharge") {
+    } else if (operation == "discharge" || operation == "discharge-id") {
         emit operationOk("Paciente dado de alta correctamente.");
     }
 

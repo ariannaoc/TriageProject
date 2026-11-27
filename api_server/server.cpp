@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -112,48 +113,6 @@ int contarCentros(sqlite3* db) {
     return total;
 }
 
-bool tieneColumna(sqlite3* db, const char* tabla, const char* columna) {
-    const std::string sql = std::string("PRAGMA table_info(") + tabla + ");";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        return false;
-    }
-    bool existe = false;
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        const auto* nombre = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        if (nombre != nullptr && std::string(nombre) == columna) {
-            existe = true;
-            break;
-        }
-    }
-    sqlite3_finalize(stmt);
-    return existe;
-}
-
-void migrarColumnasCentros(sqlite3* db) {
-    struct Columna { const char* nombre; const char* ddl; };
-    const Columna columnas[] = {
-        {"nivel_complejidad", "ALTER TABLE centers ADD COLUMN nivel_complejidad INTEGER CHECK(nivel_complejidad BETWEEN 1 AND 4);"},
-        {"capacidad_total", "ALTER TABLE centers ADD COLUMN capacidad_total INTEGER CHECK(capacidad_total >= 0);"},
-        {"cola_actual", "ALTER TABLE centers ADD COLUMN cola_actual INTEGER NOT NULL DEFAULT 0;"}
-    };
-    for (const auto& columna : columnas) {
-        if (tieneColumna(db, "centers", columna.nombre)) {
-            continue;
-        }
-        char* error = nullptr;
-        if (sqlite3_exec(db, columna.ddl, nullptr, nullptr, &error) != SQLITE_OK) {
-            std::cerr << "No se pudo migrar " << columna.nombre << ": "
-                      << (error != nullptr ? error : sqlite3_errmsg(db)) << std::endl;
-            sqlite3_free(error);
-        } else {
-            std::cout << "Columna migrada en centers: " << columna.nombre << std::endl;
-        }
-    }
-    sqlite3_exec(db, "UPDATE centers SET nivel_complejidad = 5 - max_level WHERE nivel_complejidad IS NULL;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db, "UPDATE centers SET capacidad_total = capacity WHERE capacidad_total IS NULL;", nullptr, nullptr, nullptr);
-}
-
 bool ejecutarSql(sqlite3* db, const fs::path& archivo, std::string& mensajeError) {
     std::ifstream entrada(archivo);
     if (!entrada.is_open()) {
@@ -204,8 +163,6 @@ bool inicializarBase(const fs::path& rutaDb, const fs::path& directorioDatos, co
         }
         std::cout << "Esquema inicializado desde " << script.string() << std::endl;
     }
-
-    migrarColumnasCentros(db);
 
     if (contarCentros(db) == 0) {
         const fs::path semilla = buscarScript(directorioDatos, raiz, "seed.sql");
@@ -361,8 +318,7 @@ int main(int argc, char* argv[])
             return;
         }
 
-        const char* sql = "SELECT center_id, name, type, max_level, capacity, location, latitude, longitude, "
-                          "nivel_complejidad, capacidad_total, cola_actual FROM centers;";
+        const char* sql = "SELECT center_id, name, type, max_level, capacity, location, latitude, longitude FROM centers;";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
 
@@ -376,11 +332,7 @@ int main(int argc, char* argv[])
                 {"capacity", sqlite3_column_int(stmt, 4)},
                 {"location", reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5))},
                 {"latitude", sqlite3_column_double(stmt, 6)},
-                {"longitude", sqlite3_column_double(stmt, 7)},
-                {"nivel_complejidad", sqlite3_column_int(stmt, 8)},
-                {"capacidad_total", sqlite3_column_int(stmt, 9)},
-                {"capacidad_disponible", sqlite3_column_int(stmt, 4)},
-                {"cola_actual", sqlite3_column_int(stmt, 10)}
+                {"longitude", sqlite3_column_double(stmt, 7)}
             });
         }
 
@@ -405,11 +357,119 @@ int main(int argc, char* argv[])
 
         res.set_content(json{{"center_id", center_id}, {"patients", filtered}}.dump(), "application/json"); });
 
+    // GET PACIENTES INGRESADOS (para acciones por fila en el dashboard)
+    svr.Get(R"(/api/centers/(\d+)/admitted)", [](const httplib::Request &req, httplib::Response &res)
+            {
+        const int center_id = std::stoi(req.matches[1]);
+        std::lock_guard<std::mutex> lock(db_mutex);
+        sqlite3* db = nullptr;
+        if (sqlite3_open(DB_PATH.c_str(), &db) != SQLITE_OK) {
+            res.status = 500;
+            res.set_content(R"({"error":"No se pudo abrir la base de datos"})", "application/json");
+            return;
+        }
+
+        const char* sql = R"(
+            SELECT rowid, cedula, first_name, last_name, age, triage_level,
+                   triage_score, symptoms, status, admission_date
+            FROM patients
+            WHERE center_id = ? AND status = 'ADMITTED'
+            ORDER BY admission_date DESC;
+        )";
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+        sqlite3_bind_int(stmt, 1, center_id);
+
+        json patients = json::array();
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            auto texto = [stmt](int columna) -> std::string {
+                const auto* valor = sqlite3_column_text(stmt, columna);
+                return valor != nullptr ? reinterpret_cast<const char*>(valor) : "";
+            };
+            patients.push_back({
+                {"patient_id", sqlite3_column_int(stmt, 0)},
+                {"cedula", texto(1)},
+                {"first_name", texto(2)},
+                {"last_name", texto(3)},
+                {"age", sqlite3_column_int(stmt, 4)},
+                {"triage_level", sqlite3_column_int(stmt, 5)},
+                {"triage_score", sqlite3_column_int(stmt, 6)},
+                {"symptoms", texto(7)},
+                {"status", texto(8)},
+                {"admission_date", texto(9)}
+            });
+        }
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        res.set_content(json{{"center_id", center_id}, {"patients", patients}}.dump(), "application/json"); });
+
+    // GET TENDENCIAS HISTÓRICAS POR NIVEL (para el panel de KPIs)
+    svr.Get(R"(/api/centers/(\d+)/trends)", [](const httplib::Request &req, httplib::Response &res)
+            {
+        const int center_id = std::stoi(req.matches[1]);
+        int days = 7;
+        if (req.has_param("days")) {
+            try { days = std::stoi(req.get_param_value("days")); } catch (...) { days = 7; }
+        }
+        days = std::max(1, std::min(90, days));
+
+        std::lock_guard<std::mutex> lock(db_mutex);
+        sqlite3* db = nullptr;
+        if (sqlite3_open(DB_PATH.c_str(), &db) != SQLITE_OK) {
+            res.status = 500;
+            res.set_content(R"({"error":"No se pudo abrir la base de datos"})", "application/json");
+            return;
+        }
+
+        const char* sql = R"(
+            SELECT date(admission_date) AS dia,
+                   SUM(CASE WHEN triage_level = 1 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN triage_level = 2 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN triage_level = 3 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN triage_level = 4 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN triage_level = 5 THEN 1 ELSE 0 END),
+                   COUNT(*)
+            FROM patients
+            WHERE center_id = ? AND triage_level IS NOT NULL
+              AND date(admission_date) >= date('now', ?)
+            GROUP BY date(admission_date)
+            ORDER BY dia ASC;
+        )";
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+        sqlite3_bind_int(stmt, 1, center_id);
+        const std::string offset = "-" + std::to_string(days - 1) + " days";
+        sqlite3_bind_text(stmt, 2, offset.c_str(), -1, SQLITE_TRANSIENT);
+
+        json trends = json::array();
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            trends.push_back({
+                {"date", sqlite3_column_text(stmt, 0) ? reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)) : ""},
+                {"level_1", sqlite3_column_int(stmt, 1)},
+                {"level_2", sqlite3_column_int(stmt, 2)},
+                {"level_3", sqlite3_column_int(stmt, 3)},
+                {"level_4", sqlite3_column_int(stmt, 4)},
+                {"level_5", sqlite3_column_int(stmt, 5)},
+                {"total", sqlite3_column_int(stmt, 6)}
+            });
+        }
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        res.set_content(json{{"center_id", center_id}, {"days", days}, {"trends", trends}}.dump(), "application/json"); });
+
     // POST PACIENTES TEMPORALES (JSON)
     svr.Post("/api/temp-patients", [](const httplib::Request &req, httplib::Response &res)
              {
         try {
             auto new_p = json::parse(req.body);
+            if (!new_p.contains("latitud") || !new_p["latitud"].is_number()) {
+                new_p["latitud"] = 8.5897;
+            }
+            if (!new_p.contains("longitud") || !new_p["longitud"].is_number()) {
+                new_p["longitud"] = -71.1561;
+            }
             std::lock_guard<std::mutex> lock(json_mutex);
 
             json data = readTempPatients();
@@ -455,7 +515,7 @@ int main(int argc, char* argv[])
         try
         {
             auto payload = json::parse(req.body);
-            std::string cedula = payload.at("cedula").get<std::string>();
+            std::string cedula = payload.value("cedula", "");
 
             std::lock_guard<std::mutex> lock_j(json_mutex);
             json data = readTempPatients();
@@ -478,6 +538,10 @@ int main(int argc, char* argv[])
                 res.status = 404;
                 res.set_content(R"({"error":"Paciente temporal no encontrado en este centro"})", "application/json");
                 return;
+            }
+
+            if (cedula.empty() || cedula == "Sin cédula") {
+                cedula = "SIN-" + std::to_string(temp_id);
             }
 
             // Insertar en SQLite
@@ -578,6 +642,45 @@ int main(int argc, char* argv[])
         sqlite3_close(db);
 
         res.set_content(json{{"status", "discharged"}, {"cedula", cedula}}.dump(), "application/json"); });
+
+    // ALTA POR ID INTERNO: funciona también para pacientes "Sin cédula"
+    svr.Post(R"(/api/centers/(\d+)/discharge-id/(\d+))", [](const httplib::Request &req, httplib::Response &res)
+             {
+        const int center_id = std::stoi(req.matches[1]);
+        const int patient_id = std::stoi(req.matches[2]);
+
+        std::lock_guard<std::mutex> lock_db(db_mutex);
+        sqlite3* db = nullptr;
+        sqlite3_open(DB_PATH.c_str(), &db);
+
+        const char* sql = R"(
+            UPDATE patients
+            SET status = 'DISCHARGED', discharge_date = CURRENT_TIMESTAMP
+            WHERE rowid = ? AND center_id = ? AND status = 'ADMITTED';
+        )";
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+        sqlite3_bind_int(stmt, 1, patient_id);
+        sqlite3_bind_int(stmt, 2, center_id);
+        sqlite3_step(stmt);
+        const int changed = sqlite3_changes(db);
+        sqlite3_finalize(stmt);
+
+        if (changed == 0) {
+            sqlite3_close(db);
+            res.status = 404;
+            res.set_content(R"({"error":"Paciente admitido no encontrado en este centro"})", "application/json");
+            return;
+        }
+
+        sqlite3_stmt* upd = nullptr;
+        sqlite3_prepare_v2(db, "UPDATE centers SET capacity = capacity + 1 WHERE center_id = ?;", -1, &upd, nullptr);
+        sqlite3_bind_int(upd, 1, center_id);
+        sqlite3_step(upd);
+        sqlite3_finalize(upd);
+        sqlite3_close(db);
+
+        res.set_content(json{{"status", "discharged"}, {"patient_id", patient_id}}.dump(), "application/json"); });
 
     std::cout << "Servidor Triage API escuchando en http://0.0.0.0:8081\n";
     svr.listen("0.0.0.0", 8081);
