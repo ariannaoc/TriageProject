@@ -2,6 +2,8 @@
 #include "ui_VistaMain.h"
 #include <QIcon>
 #include <QGraphicsOpacityEffect>
+#include <QBoxLayout>
+#include <QResizeEvent>
 
 VistaMain::VistaMain(QWidget* parent) : QWidget(parent), ui(new Ui::VistaMain) {
     ui->setupUi(this);
@@ -21,6 +23,26 @@ VistaMain::VistaMain(QWidget* parent) : QWidget(parent), ui(new Ui::VistaMain) {
 
     connect(ui->BotonEmergencia, &QPushButton::clicked, this, &VistaMain::pacienteClicked);
     connect(ui->BotonCentroSalud, &QPushButton::clicked, this, &VistaMain::centroClicked);
+}
+
+
+void VistaMain::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+
+   if (ui->label_fondo) {
+        ui->label_fondo->setGeometry(rect());
+        ui->label_fondo->lower();
+    }
+
+    // 760 px permite activar el modo móvil antes de que los botones bloqueen el ancho mínimo
+    bool esMovil = width() < 760;
+
+    // Oculta la foto lateral en celular y la muestra en PC
+    ui->label_imagen->setVisible(!esMovil);
+
+    // Apila los botones en vertical en celular y en horizontal en PC
+    ui->layoutBotones->setDirection(esMovil ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+
 }
 
 VistaMain::~VistaMain() { delete ui; }

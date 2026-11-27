@@ -12,12 +12,15 @@
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QLabel>
+#include <QScrollArea>
 #include <QCryptographicHash>
+#include <QShortcut>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     centerIdActual(-1), operacionDashboardEnCurso(false) {
     setWindowTitle("TriageMe - Sistema de Triage para Centros de Salud");
-    resize(900, 450);
+     resize(900, 540);
 
     api = new ApiClient(this);
     precargarCentrosMerida();
@@ -55,6 +58,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     pilaVistas->setCurrentWidget(vistaMain);
     api->health();
     api->fetchCenters();
+    
+auto* atajoMovil = new QShortcut(QKeySequence("Ctrl+M"), this);
+atajoMovil->setContext(Qt::ApplicationShortcut);
+connect(atajoMovil, &QShortcut::activated, this, [this]() {
+    const bool irAMovil = width() > 500;
+    if (isMaximized()) {
+        showNormal();
+        QTimer::singleShot(50, this, [this, irAMovil]() {
+            resize(irAMovil ? QSize(390, 844) : QSize(900, 540));
+        });
+    } else {
+        resize(irAMovil ? QSize(390, 844) : QSize(900, 540));
+    }
+});
 }
 
 void MainWindow::precargarCentrosMerida() {
@@ -78,7 +95,12 @@ void MainWindow::configurarVistaMain() {
     connect(v, &VistaMain::centroClicked, this, [this]() {
         pilaVistas->setCurrentWidget(vistaLoginCentro);
     });
+    auto* scrollMain = new QScrollArea(this);
+    scrollMain->setWidgetResizable(true);
+    scrollMain->setFrameShape(QFrame::NoFrame);
+    scrollMain->setWidget(v);
 
+    vistaMain = scrollMain; // Así todos tus setCurrentWidget(vistaMain) siguen funcionando igual
     pilaVistas->addWidget(vistaMain);
 }
 
