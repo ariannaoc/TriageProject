@@ -5,6 +5,7 @@
 #include <QJsonParseError>
 #include <QNetworkRequest>
 #include <QTimer>
+#include <QUrlQuery>
 
 namespace {
 constexpr int kTimeoutMs = 8000;
@@ -38,6 +39,24 @@ void ApiClient::fetchPendingPatients(int centerId) {
     prepareReply(reply, "pending");
 }
 
+void ApiClient::fetchAdmittedPatients(int centerId) {
+    QNetworkRequest request(endpoint(QString("/api/centers/%1/admitted").arg(centerId)));
+    QNetworkReply* reply = manager.get(request);
+    reply->setProperty("centerId", centerId);
+    prepareReply(reply, "admitted");
+}
+
+void ApiClient::fetchTrends(int centerId, int days) {
+    QUrl url = endpoint(QString("/api/centers/%1/trends").arg(centerId));
+    QUrlQuery query;
+    query.addQueryItem("days", QString::number(qBound(1, days, 90)));
+    url.setQuery(query);
+    QNetworkRequest request(url);
+    QNetworkReply* reply = manager.get(request);
+    reply->setProperty("centerId", centerId);
+    prepareReply(reply, "trends");
+}
+
 void ApiClient::createTempPatient(const QJsonObject& patient) {
     postJson("/api/temp-patients", patient, "create");
 }
@@ -50,6 +69,11 @@ void ApiClient::admitPatient(int centerId, int tempId, const QString& cedula) {
 void ApiClient::dischargePatient(int centerId, const QString& cedula) {
     postJson(QString("/api/centers/%1/discharge/%2").arg(centerId).arg(cedula),
              QJsonObject{}, "discharge");
+}
+
+void ApiClient::dischargePatientById(int centerId, int patientId) {
+    postJson(QString("/api/centers/%1/discharge-id/%2").arg(centerId).arg(patientId),
+             QJsonObject{}, "discharge-id");
 }
 
 QUrl ApiClient::endpoint(const QString& path) const {
@@ -146,11 +170,23 @@ void ApiClient::onFinished(QNetworkReply* reply) {
             pacientes.append(PacienteTemp::fromJson(item.toObject()));
         }
         emit pendingLoaded(reply->property("centerId").toInt(), pacientes);
+    } else if (operation == "admitted") {
+        QVector<PacienteIngresado> pacientes;
+        for (const QJsonValue& item : body.value("patients").toArray()) {
+            pacientes.append(PacienteIngresado::fromJson(item.toObject()));
+        }
+        emit admittedLoaded(reply->property("centerId").toInt(), pacientes);
+    } else if (operation == "trends") {
+        QVector<DatoTendencia> tendencias;
+        for (const QJsonValue& item : body.value("trends").toArray()) {
+            tendencias.append(DatoTendencia::fromJson(item.toObject()));
+        }
+        emit trendsLoaded(reply->property("centerId").toInt(), tendencias);
     } else if (operation == "create") {
         emit operationOk("Paciente registrado en la cola del centro.");
     } else if (operation == "admit") {
         emit operationOk("Paciente admitido correctamente.");
-    } else if (operation == "discharge") {
+    } else if (operation == "discharge" || operation == "discharge-id") {
         emit operationOk("Paciente dado de alta correctamente.");
     }
 

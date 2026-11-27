@@ -35,6 +35,11 @@ qt_add_executable(TriageProject
     src/FormularioPacienteWidget.cpp
     src/ApiClient.cpp
     src/ModelosApi.cpp
+    src/BarraOcupacionWidget.cpp
+    src/GraficoBarrasNivelesWidget.cpp
+    src/GraficoLineasTendenciasWidget.cpp
+    src/PanelKpi3Widget.cpp
+    src/PanelKpi7Widget.cpp
     include/MainWindow.hpp
     include/LoginWidget.hpp
     include/VistaMain.hpp
@@ -42,6 +47,11 @@ qt_add_executable(TriageProject
     include/FormularioPacienteWidget.hpp
     include/ApiClient.hpp
     include/ModelosApi.hpp
+    include/BarraOcupacionWidget.hpp
+    include/GraficoBarrasNivelesWidget.hpp
+    include/GraficoLineasTendenciasWidget.hpp
+    include/PanelKpi3Widget.hpp
+    include/PanelKpi7Widget.hpp
     recursos.qrc
 )
 

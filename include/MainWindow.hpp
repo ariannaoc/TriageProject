@@ -12,9 +12,17 @@
 class ApiClient;
 class QTableWidget;
 class QPushButton;
+class QComboBox;
+class QScrollArea;
+class BarraOcupacionWidget;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
+
+    struct FilaPaciente {
+        bool ingresado = false;
+        int id = 0;
+    };
 
 private:
     ApiClient* api;
@@ -25,15 +33,35 @@ private:
     FormularioPacienteWidget* vistaModuloPaciente;
     LoginWidget* vistaLoginCentro;
     QWidget* vistaDashboardCentro;
+    QScrollArea* scrollDashboard;
 
-    // Etiquetas dinámicas del Dashboard para mostrar el centro autenticado
+    // Cabecera del dashboard
     QLabel* lblTituloDashboard;
     QLabel* lblDetalleCentroDashboard;
     QLabel* lblEstadoDashboard;
-    QTableWidget* tablaPendientes;
+    QLabel* badgeCategoria;
+    QLabel* badgeNivelMax;
+    QLabel* badgeCamas;
+    BarraOcupacionWidget* barraOcupacion;
     QPushButton* btnActualizarPendientes;
-    QPushButton* btnAdmitir;
-    QPushButton* btnDarAlta;
+    QPushButton* btnVerTodosKpis;
+
+    // Tarjetas de resumen
+    QLabel* lblKpiPendientes;
+    QLabel* lblKpiIngresados;
+    QLabel* lblKpiCamas;
+    QLabel* lblKpiUrgencia;
+
+    // Gestión de pacientes
+    QTableWidget* tablaPendientes;
+    QComboBox* comboFiltroPacientes;
+    static constexpr int columnaAcciones = 8;
+    QVector<FilaPaciente> filasPacientes;
+    QVector<PacienteTemp> pendientesActuales;
+    QVector<PacienteIngresado> admitidosActuales;
+    int capacidadDisponibleActual = 0;
+    bool pendientesRecibidos = false;
+    bool admitidosRecibidos = false;
 
     // Árbol AVL de DeSiGNAR con las credenciales de los centros de salud de Mérida
     AVLTree<CredencialCentro> arbolCentros;
@@ -49,16 +77,21 @@ private:
     void refrescarPendientes();
     void setDashboardLoading(bool cargando);
     void actualizarCapacidad(int capacidad);
-    bool cedulaValida(const QString& cedula) const;
+    void reconstruirTablaPacientes();
+    void aplicarFiltroTabla();
+    void actualizarKpis();
+    void actualizarBarraOcupacion();
+    void mostrarDialogoKpis();
+    void ingresarFila(int fila);
+    void darAltaFila(int fila);
 
 private slots:
     void onLoginOk(const SesionCentro& sesion);
     void onCentrosCargados(const QVector<CentroInfo>& centros);
     void onPendientesCargados(int centerId, const QVector<PacienteTemp>& pacientes);
+    void onAdmitidosCargados(int centerId, const QVector<PacienteIngresado>& pacientes);
     void onOperationOk(const QString& message);
     void onRequestFailed(const QString& operation, const QString& message);
-    void admitirSeleccionado();
-    void darAltaSeleccionado();
     void enviarPaciente(const QJsonObject& datos);
 
 public:

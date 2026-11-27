@@ -18,9 +18,12 @@ public:
     void login(const QString& username, const QString& password);
     void fetchCenters();
     void fetchPendingPatients(int centerId);
+    void fetchAdmittedPatients(int centerId);
+    void fetchTrends(int centerId, int days);
     void createTempPatient(const QJsonObject& patient);
     void admitPatient(int centerId, int tempId, const QString& cedula);
     void dischargePatient(int centerId, const QString& cedula);
+    void dischargePatientById(int centerId, int patientId);
 
 signals:
     void requestStarted(const QString& operation);
@@ -29,6 +32,8 @@ signals:
     void loginOk(const SesionCentro& sesion);
     void centersLoaded(const QVector<CentroInfo>& centros);
     void pendingLoaded(int centerId, const QVector<PacienteTemp>& pacientes);
+    void admittedLoaded(int centerId, const QVector<PacienteIngresado>& pacientes);
+    void trendsLoaded(int centerId, const QVector<DatoTendencia>& tendencias);
     void operationOk(const QString& message);
     void failed(const QString& operation, const QString& message);
 
