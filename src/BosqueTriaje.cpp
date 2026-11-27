@@ -19,7 +19,6 @@ int sumarSeleccionadas(const Nodo& nodo, const std::set<int>& ids)
     }
     return total;
 }
-<<<<<<< HEAD
 
 void recolectarOpciones(const Nodo& nodo, std::vector<OpcionSintoma>& opciones)
 {
@@ -34,9 +33,6 @@ void recolectarOpciones(const Nodo& nodo, std::vector<OpcionSintoma>& opciones)
     }
 }
 } 
-=======
-}  // namespace
->>>>>>> main
 
 void BosqueTriaje::construirDesdeCategorias(const std::vector<CategoriaTriaje>& categorias)
 {
@@ -97,7 +93,6 @@ std::string BosqueTriaje::nombreCategoria(int idCategoria) const
     const auto it = nombres_.find(idCategoria);
     return it == nombres_.end() ? "" : it->second;
 }
-<<<<<<< HEAD
 
 std::vector<int> BosqueTriaje::categorias() const
 {
@@ -121,5 +116,3 @@ std::vector<OpcionSintoma> BosqueTriaje::opcionesCategoria(int idCategoria) cons
     recolectarOpciones(*it->second, opciones);
     return opciones;
 }
-=======
->>>>>>> main

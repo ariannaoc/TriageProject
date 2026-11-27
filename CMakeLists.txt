@@ -31,14 +31,6 @@ qt_add_executable(TriageProject
     src/MotorTriaje.cpp
     src/GestorCentros.cpp
     src/MotorEnrutamiento.cpp
-<<<<<<< HEAD
-=======
-    include/modelos_triaje.hpp
-    include/BosqueTriaje.hpp
-    include/MotorTriaje.hpp
-    include/GestorCentros.hpp
-    include/MotorEnrutamiento.hpp
->>>>>>> main
     src/main.cpp
     src/MainWindow.cpp
     src/LoginWidget.cpp
@@ -66,7 +58,6 @@ target_link_libraries(TriageProject PRIVATE
     Designar::Designar
     Qt6::Widgets
     Qt6::Sql
-<<<<<<< HEAD
     Qt6::Network
     Qt6::Positioning
 )
@@ -91,10 +82,6 @@ if(NOT ANDROID)
     )
 endif()
 
-=======
-)
-
->>>>>>> main
 # Target de pruebas del motor de triaje y enrutamiento (sin Qt)
 add_executable(test_motores
     tests/test_motores.cpp
