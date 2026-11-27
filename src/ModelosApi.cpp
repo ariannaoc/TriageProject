@@ -42,3 +42,16 @@ PacienteTemp PacienteTemp::fromJson(const QJsonObject& json) {
     paciente.symptoms = json.value("symptoms").toString();
     return paciente;
 }
+
+DatoTendencia DatoTendencia::fromJson(const QJsonObject& json)
+{
+    DatoTendencia t;
+    t.fecha    = QDate::fromString(json.value("date").toString(), Qt::ISODate);
+    t.nivelI   = json.value("level_1").toInt();
+    t.nivelII  = json.value("level_2").toInt();
+    t.nivelIII = json.value("level_3").toInt();
+    t.nivelIV  = json.value("level_4").toInt();
+    t.nivelV   = json.value("level_5").toInt();
+    t.total    = json.value("total").toInt();
+    return t;
+}

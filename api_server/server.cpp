@@ -355,7 +355,8 @@ int main() {
         sqlite3_bind_text(stmtPat, 2, target["first_name"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmtPat, 3, target["last_name"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmtPat, 4, target["age"].get<int>());
-        sqlite3_bind_text(stmtPat, 5, target["sex"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+        std::string sexo = target.contains("sex") && target["sex"].is_string() ? target["sex"].get<std::string>() : "M";
+        sqlite3_bind_text(stmtPat, 5, sexo.c_str(), -1, SQLITE_TRANSIENT);
 
         if (sqlite3_step(stmtPat) != SQLITE_DONE) success = false;
         sqlite3_finalize(stmtPat);
@@ -377,7 +378,7 @@ int main() {
 
         // 3. Reducir capacidad
         if (success) {
-            const char* sqlCap = "UPDATE centers SET capacity = capacity - 1 WHERE center_id = ?;";
+            const char* sqlCap = "UPDATE centers SET cola_actual = cola_actual + 1 WHERE center_id = ?;";
             sqlite3_stmt* stmtCap;
             sqlite3_prepare_v2(db, sqlCap, -1, &stmtCap, nullptr);
             sqlite3_bind_int(stmtCap, 1, centerId);
@@ -435,6 +436,126 @@ int main() {
         } catch (...) { res.status = 400; } });
 
     std::cout << "Iniciando servidor Triage en http://0.0.0.0:8081..." << std::endl;
+    // -------------------------------------------------------------------------
+    // KPI 7 — Tendencias históricas por día y nivel de triaje
+    // GET /api/centers/:id/trends?days=N
+    // -------------------------------------------------------------------------
+    svr.Get("/api/centers/:id/trends", [](const httplib::Request& req, httplib::Response& res) {
+        sqlite3* db = nullptr;
+        if (sqlite3_open(rutaBaseDatos().string().c_str(), &db) != SQLITE_OK) {
+            res.status = 500;
+            res.set_content(json{{"error", "No se pudo abrir la base de datos"}}.dump(), "application/json");
+            if (db) sqlite3_close(db);
+            return;
+        }
+
+        int centerId = 0;
+        try {
+            centerId = std::stoi(req.path_params.at("id"));
+        } catch (...) {
+            res.status = 400;
+            res.set_content(json{{"error", "center_id inválido"}}.dump(), "application/json");
+            sqlite3_close(db);
+            return;
+        }
+
+        int days = 7;
+        if (req.has_param("days")) {
+            try { days = std::stoi(req.get_param_value("days")); } catch (...) {}
+            if (days < 1)  days = 1;
+            if (days > 90) days = 90;
+        }
+
+        const char* sql =
+            "SELECT date(created_at) AS dia, "
+            "  SUM(CASE WHEN triage_level=1 THEN 1 ELSE 0 END) AS lvl1, "
+            "  SUM(CASE WHEN triage_level=2 THEN 1 ELSE 0 END) AS lvl2, "
+            "  SUM(CASE WHEN triage_level=3 THEN 1 ELSE 0 END) AS lvl3, "
+            "  SUM(CASE WHEN triage_level=4 THEN 1 ELSE 0 END) AS lvl4, "
+            "  SUM(CASE WHEN triage_level=5 THEN 1 ELSE 0 END) AS lvl5, "
+            "  COUNT(*) AS total "
+            "FROM triage_records "
+            "WHERE center_id = ? "
+            "  AND date(created_at) >= date('now', ?) "
+            "GROUP BY date(created_at) "
+            "ORDER BY dia ASC;";
+
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            res.status = 500;
+            res.set_content(json{{"error", "Error de consulta"}}.dump(), "application/json");
+            sqlite3_close(db);
+            return;
+        }
+
+        sqlite3_bind_int(stmt, 1, centerId);
+        const std::string offset = "-" + std::to_string(days - 1) + " days";
+        sqlite3_bind_text(stmt, 2, offset.c_str(), -1, SQLITE_TRANSIENT);
+
+        json trends = json::array();
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char* dia = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            trends.push_back({
+                {"date",    dia ? dia : ""},
+                {"level_1", sqlite3_column_int(stmt, 1)},
+                {"level_2", sqlite3_column_int(stmt, 2)},
+                {"level_3", sqlite3_column_int(stmt, 3)},
+                {"level_4", sqlite3_column_int(stmt, 4)},
+                {"level_5", sqlite3_column_int(stmt, 5)},
+                {"total",   sqlite3_column_int(stmt, 6)}
+            });
+        }
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+
+        res.set_content(json{
+            {"center_id", centerId},
+            {"days", days},
+            {"trends", trends}
+        }.dump(), "application/json");
+    });
+
+
+    svr.Post("/api/centers/:centerId/discharge/:cedula",
+             [&](const httplib::Request& req, httplib::Response& res)
+             {
+        int centerId = std::stoi(req.path_params.at("centerId"));
+        std::string cedula = req.path_params.at("cedula");
+
+        sqlite3* db = get_db();
+        if (!db) { res.status = 500; return; }
+
+        sqlite3_exec(db, "BEGIN EXCLUSIVE TRANSACTION;", nullptr, nullptr, nullptr);
+        bool success = true;
+
+        // 1. Cambiar estado a DISCHARGED
+        const char* sqlDis = "UPDATE triage_records SET status = 'DISCHARGED' WHERE cedula = ? AND center_id = ? AND status = 'ADMITTED';";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(db, sqlDis, -1, &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, cedula.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, centerId);
+        if (sqlite3_step(stmt) != SQLITE_DONE) success = false;
+        sqlite3_finalize(stmt);
+
+        // 2. Restar a cola_actual
+        if (success) {
+            const char* sqlCap = "UPDATE centers SET cola_actual = CASE WHEN cola_actual > 0 THEN cola_actual - 1 ELSE 0 END WHERE center_id = ?;";
+            sqlite3_prepare_v2(db, sqlCap, -1, &stmt, nullptr);
+            sqlite3_bind_int(stmt, 1, centerId);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+        }
+
+        if (success) {
+            sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+            res.set_content(json{{"status", "success"}}.dump(), "application/json");
+        } else {
+            sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+            res.status = 500;
+        }
+        sqlite3_close(db); });
+
     svr.listen("0.0.0.0", 8081);
 
     return 0;

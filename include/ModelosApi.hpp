@@ -2,6 +2,7 @@
 #include <QJsonObject>
 #include <QString>
 #include <QVector>
+#include <QDate>
 
 struct SesionCentro {
     int centerId = -1;
@@ -45,3 +46,28 @@ struct PacienteTemp {
 
     static PacienteTemp fromJson(const QJsonObject& json);
 };
+
+struct DatoTendencia {
+    QDate fecha;
+    int nivelI    = 0;
+    int nivelII   = 0;
+    int nivelIII  = 0;
+    int nivelIV   = 0;
+    int nivelV    = 0;
+    int total     = 0;
+
+    /// Acceso por índice 0..4 → I..V.
+    int nivel(int idx) const {
+        switch (idx) {
+            case 0: return nivelI;
+            case 1: return nivelII;
+            case 2: return nivelIII;
+            case 3: return nivelIV;
+            case 4: return nivelV;
+            default: return 0;
+        }
+    }
+
+    static DatoTendencia fromJson(const QJsonObject& json);
+};
+

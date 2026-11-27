@@ -13,6 +13,11 @@
 #include <QRegularExpression>
 #include <QLabel>
 #include <QCryptographicHash>
+#include "BarraOcupacionWidget.hpp"
+#include <QDialog>
+#include "PanelKpi3Widget.hpp"
+#include <QTabWidget>
+#include "PanelKpi7Widget.hpp"
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     centerIdActual(-1), operacionDashboardEnCurso(false) {
@@ -42,6 +47,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
 
     connect(api, &ApiClient::centersLoaded, this, &MainWindow::onCentrosCargados);
     connect(api, &ApiClient::pendingLoaded, this, &MainWindow::onPendientesCargados);
+    connect(api, &ApiClient::trendsLoaded, this, &MainWindow::onTrendsLoaded);
     connect(api, &ApiClient::healthOk, this, [this]() {
         if (centerIdActual <= 0) {
             lblEstadoDashboard->setText("API disponible.");
@@ -137,13 +143,30 @@ void MainWindow::configurarVistaDashboardPlaceholder() {
         pilaVistas->setCurrentWidget(vistaMain);
     });
 
-    layout->addWidget(lblTituloDashboard);
+    barraOcupacion = new BarraOcupacionWidget(this);
+    auto* headerLayout = new QHBoxLayout();
+    headerLayout->addWidget(lblTituloDashboard, 1);
+    headerLayout->addWidget(barraOcupacion, 0);
+
+    btnVerTodosKpis = new QPushButton("📊 Ver todos los KPIs", this);
+    connect(btnVerTodosKpis, &QPushButton::clicked, this, &MainWindow::mostrarDialogoKpis);
+    botones->addWidget(btnVerTodosKpis);
+
+    layout->addLayout(headerLayout);
     layout->addWidget(lblDetalleCentroDashboard);
     layout->addWidget(lblEstadoDashboard);
     layout->addSpacing(10);
     layout->addWidget(tablaPendientes);
     layout->addLayout(botones);
     layout->addWidget(btnCerrarSesion);
+
+    timerRefrescoKpis = new QTimer(this);
+    timerRefrescoKpis->setInterval(30000);
+    connect(timerRefrescoKpis, &QTimer::timeout, this, [this]() {
+        refrescarPendientes();
+        api->fetchCenters();
+    });
+    timerRefrescoKpis->start();
 
     pilaVistas->addWidget(vistaDashboardCentro);
 }
@@ -155,7 +178,9 @@ void MainWindow::onLoginOk(const SesionCentro& sesion) {
     lblTituloDashboard->setText(QString("🏥 Dashboard: %1").arg(sesion.centerName));
     actualizarCapacidad(sesion.capacity);
     pilaVistas->setCurrentWidget(vistaDashboardCentro);
+    actualizarBarraOcupacion();
     refrescarPendientes();
+    api->fetchCenters();
 }
 
 void MainWindow::onCentrosCargados(const QVector<CentroInfo>& centros) {
@@ -168,9 +193,12 @@ void MainWindow::onCentrosCargados(const QVector<CentroInfo>& centros) {
             break;
         }
     }
-}
+
+    actualizarBarraOcupacion();}
 
 void MainWindow::onPendientesCargados(int centerId, const QVector<PacienteTemp>& pacientes) {
+    pendientesActuales = pacientes;  // KPI 3: snapshot
+
     if (centerId != centerIdActual) {
         return;
     }
@@ -202,7 +230,8 @@ void MainWindow::onPendientesCargados(int centerId, const QVector<PacienteTemp>&
         ? "No hay pacientes pendientes en este centro."
         : QString("%1 paciente(s) pendiente(s).").arg(pacientes.size()));
     setDashboardLoading(false);
-}
+
+    actualizarBarraOcupacion();}
 
 void MainWindow::onOperationOk(const QString& message) {
     operacionDashboardEnCurso = false;
@@ -329,3 +358,117 @@ void MainWindow::darAltaSeleccionado() {
 void MainWindow::enviarPaciente(const QJsonObject& datos) {
     api->createTempPatient(datos);
 }
+
+// =============================================================================
+// KPI 2 — Ocupación en tiempo real comprometida
+// =============================================================================
+
+void MainWindow::actualizarBarraOcupacion()
+{
+    if (centerIdActual < 0 || !barraOcupacion) return;
+
+    int capacidadTotal = sesionActual.capacity;
+    int ocupado = 0;
+
+    // Leer los datos reales y actualizados de la lista de centros
+    for (const auto& c : centrosDisponibles) {
+        if (c.centerId == centerIdActual) {
+            ocupado = c.colaActual;
+            if (c.capacity > 0) capacidadTotal = c.capacity;
+            break;
+        }
+    }
+
+    const int enCamino = tablaPendientes ? tablaPendientes->rowCount() : 0;
+
+    // 1. Actualizar la barra gráfica (El 0/150)
+    barraOcupacion->setDatos(ocupado, enCamino, capacidadTotal);
+
+    // 2. Actualizar el texto "Camas disponibles"
+    if (lblDetalleCentroDashboard) {
+        int camasDisponibles = qMax(0, capacidadTotal - ocupado);
+        lblDetalleCentroDashboard->setText(
+            QString("Categoría: %1 | Nivel Máx MPPS: Nivel %2 | Camas disponibles: %3")
+                .arg(sesionActual.centerType)
+                .arg(sesionActual.maxLevel)
+                .arg(camasDisponibles));
+    }
+}
+void MainWindow::mostrarDialogoKpis()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle("KPIs del Centro");
+    dlg.resize(920, 640);
+
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(12, 12, 12, 12);
+
+    auto* titulo = new QLabel("\U0001F4CA Panel de KPIs", &dlg);
+    titulo->setStyleSheet("font-size: 18px; font-weight: bold; color: #1b5e20;");
+    titulo->setAlignment(Qt::AlignCenter);
+
+    auto* tabs = new QTabWidget(&dlg);
+
+    // -------- Pestaña 1: Resumen --------
+    auto* tabResumen = new QWidget(tabs);
+    auto* layResumen = new QVBoxLayout(tabResumen);
+    auto* detalle = new QLabel(
+        "KPIs disponibles:\n\n"
+        "• KPI 3 — Nivel I/II en espera\n"
+        "• KPI 7 — Tendencias por nivel de triaje\n\n"
+        "KPIs descartados por falta de datos:\n\n"
+        "• Door-to-Triage (no existe 'hora de llegada' al centro)\n"
+        "• Pacientes en camino con ETA (no hay campo ETA ni motor de ruteo)",
+        tabResumen);
+    detalle->setWordWrap(true);
+    detalle->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    layResumen->addWidget(detalle);
+    layResumen->addStretch();
+    tabs->addTab(tabResumen, "Resumen");
+
+    // -------- Pestaña 2: KPI 3 --------
+    auto* panelNivel = new PanelKpi3Widget(tabs);
+    panelNivel->setPendientes(pendientesActuales);
+    tabs->addTab(panelNivel, "Nivel I/II en espera");
+
+    // -------- Pestaña 3: KPI 7 --------
+    auto* panelTendencias = new PanelKpi7Widget(centerIdActual, tabs);
+    connect(panelTendencias, &PanelKpi7Widget::solicitarTendencias,
+            this, [this](int days) {
+                if (centerIdActual >= 0)
+                    api->fetchTrends(centerIdActual, days);
+            });
+
+    // Registrar el panel para que onTrendsLoaded() lo actualice
+    m_panelKpi7 = panelTendencias;
+
+    // Carga inicial (7 días por defecto)
+    if (centerIdActual >= 0)
+        api->fetchTrends(centerIdActual, 7);
+
+    tabs->addTab(panelTendencias, "Tendencias (histórico)");
+
+    layout->addWidget(titulo);
+    layout->addWidget(tabs, 1);
+
+    auto* cerrar = new QPushButton("Cerrar", &dlg);
+    connect(cerrar, &QPushButton::clicked, &dlg, &QDialog::accept);
+    layout->addWidget(cerrar, 0, Qt::AlignRight);
+
+    dlg.exec();
+
+    // Al cerrar, el panel se destruye → evitar dangling
+    m_panelKpi7 = nullptr;
+}
+
+// =============================================================================
+// KPI 7 — Slot que recibe las tendencias desde ApiClient
+// =============================================================================
+
+void MainWindow::onTrendsLoaded(int centerId, const QVector<DatoTendencia>& tendencias)
+{
+    if (m_panelKpi7 && centerId == centerIdActual)
+        m_panelKpi7->setTendencias(tendencias);
+}
+
+

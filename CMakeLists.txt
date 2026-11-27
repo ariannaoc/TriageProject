@@ -33,6 +33,11 @@ qt_add_executable(TriageProject
     src/MotorEnrutamiento.cpp
     src/main.cpp
     src/MainWindow.cpp
+    src/BarraOcupacionWidget.cpp
+    src/GraficoBarrasNivelesWidget.cpp
+    src/PanelKpi3Widget.cpp
+    src/GraficoLineasTendenciasWidget.cpp
+    src/PanelKpi7Widget.cpp
     src/LoginWidget.cpp
     src/VistaMain.cpp
     src/VistaMain.ui
@@ -45,6 +50,11 @@ qt_add_executable(TriageProject
     include/GestorCentros.hpp
     include/MotorEnrutamiento.hpp
     include/MainWindow.hpp
+    include/BarraOcupacionWidget.hpp
+    include/GraficoBarrasNivelesWidget.hpp
+    include/PanelKpi3Widget.hpp
+    include/GraficoLineasTendenciasWidget.hpp
+    include/PanelKpi7Widget.hpp
     include/LoginWidget.hpp
     include/VistaMain.hpp
     include/ModelosCentro.hpp

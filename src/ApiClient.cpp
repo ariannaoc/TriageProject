@@ -39,6 +39,15 @@ void ApiClient::fetchPendingPatients(int centerId) {
     prepareReply(reply, "pending");
 }
 
+void ApiClient::fetchTrends(int centerId, int days) {
+    QNetworkRequest request(endpoint(
+        QString("/api/centers/%1/trends?days=%2").arg(centerId).arg(days)));
+    QNetworkReply* reply = manager.get(request);
+    reply->setProperty("centerId", centerId);
+    reply->setProperty("days",     days);
+    prepareReply(reply, "trends");
+}
+
 void ApiClient::createTempPatient(const QJsonObject& patient) {
     postJson("/api/temp-patients", patient, "create");
 }
@@ -183,6 +192,12 @@ void ApiClient::onFinished(QNetworkReply* reply) {
             pacientes.append(PacienteTemp::fromJson(item.toObject()));
         }
         emit pendingLoaded(reply->property("centerId").toInt(), pacientes);
+    } else if (operation == "trends") {
+        QVector<DatoTendencia> tendencias;
+        for (const QJsonValue& item : body.value("trends").toArray()) {
+            tendencias.append(DatoTendencia::fromJson(item.toObject()));
+        }
+        emit trendsLoaded(reply->property("centerId").toInt(), tendencias);
     } else if (operation == "create") {
         emit operationOk("Paciente registrado en la cola del centro.");
     } else if (operation == "admit") {
