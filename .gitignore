@@ -1,17 +1,14 @@
-# Bases de datos locales binarias
-*.db
-*.sqlite
-*.sqlite3
-
-
-# Compilación CMake / Qt
 build/
-build_android/
-*.o
-*.out
+cmake-build-*/
 *.user
-compile_commands.json
-
-#Notas locales
-*Notes.MD
-*AGENTS.MD*.bak.*
+*.user.*
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.so
+*.dll
+*.dylib
+.DS_Store
+github_pat_*
