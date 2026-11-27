@@ -1,4 +1,5 @@
 build/
+build_android/
 cmake-build-*/
 *.user
 *.user.*

@@ -20,6 +20,19 @@ int sumarSeleccionadas(const Nodo& nodo, const std::set<int>& ids)
     return total;
 }
 
+void recolectarOpciones(const Nodo& nodo, std::vector<OpcionSintoma>& opciones)
+{
+    if (nodo.dato.id_opcion >= 0)
+    {
+        opciones.push_back({nodo.dato.id_opcion, nodo.textoPregunta,
+                            nodo.dato.base_points, nodo.dato.nivel_estimado});
+    }
+    for (Designar::nat_t i = 0; i < nodo.hijos.size(); ++i)
+    {
+        recolectarOpciones(*nodo.hijos[i], opciones);
+    }
+}
+}
 
 void BosqueTriaje::construirDesdeCategorias(const std::vector<CategoriaTriaje>& categorias)
 {
@@ -79,4 +92,27 @@ std::string BosqueTriaje::nombreCategoria(int idCategoria) const
 {
     const auto it = nombres_.find(idCategoria);
     return it == nombres_.end() ? "" : it->second;
+}
+
+std::vector<int> BosqueTriaje::categorias() const
+{
+    std::vector<int> ids;
+    ids.reserve(arboles_.size());
+    for (const auto& [id, arbol] : arboles_)
+    {
+        (void)arbol;
+        ids.push_back(id);
+    }
+    return ids;
+}
+
+std::vector<OpcionSintoma> BosqueTriaje::opcionesCategoria(int idCategoria) const
+{
+    std::vector<OpcionSintoma> opciones;
+    const auto it = arboles_.find(idCategoria);
+    if (it == arboles_.end())
+        return opciones;
+
+    recolectarOpciones(*it->second, opciones);
+    return opciones;
 }

@@ -38,7 +38,6 @@ void BarraOcupacionWidget::paintEvent(QPaintEvent*)
     const int margen     = 6;
     const int altoTexto  = 18;
     const int altoBarra  = 18;
-    const int altoEstado = 16;
     const int yTexto  = margen;
     const int yBarra  = yTexto + altoTexto + 2;
     const int yEstado = yBarra + altoBarra + 2;
