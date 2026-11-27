@@ -12,8 +12,8 @@ set(CMAKE_AUTOUIC ON)
 
 # Buscar librerias
 find_package(Designar REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network
-             OPTIONAL_COMPONENTS Positioning Location QuickWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network)
+find_package(Qt6 QUIET COMPONENTS Positioning)
 if(NOT ANDROID)
     find_package(SQLite3 REQUIRED)
 endif()
@@ -25,6 +25,13 @@ endif()
 
 include_directories(include)
 
+set(TRIAJE_MOTORES
+    src/BosqueTriaje.cpp
+    src/GestorCentros.cpp
+    src/MotorTriaje.cpp
+    src/MotorEnrutamiento.cpp
+)
+
 # Cliente
 qt_add_executable(TriageProject
     src/main.cpp
@@ -33,6 +40,8 @@ qt_add_executable(TriageProject
     src/VistaMain.cpp
     src/VistaMain.ui
     src/FormularioPacienteWidget.cpp
+    src/MapaSelectorWidget.cpp
+    ${TRIAJE_MOTORES}
     src/ApiClient.cpp
     src/ModelosApi.cpp
     src/BarraOcupacionWidget.cpp
@@ -45,6 +54,7 @@ qt_add_executable(TriageProject
     include/VistaMain.hpp
     include/ModelosCentro.hpp
     include/FormularioPacienteWidget.hpp
+    include/MapaSelectorWidget.hpp
     include/ApiClient.hpp
     include/ModelosApi.hpp
     include/BarraOcupacionWidget.hpp
@@ -67,11 +77,6 @@ if(Qt6Positioning_FOUND)
     target_link_libraries(TriageProject PRIVATE Qt6::Positioning)
 endif()
 
-if(Qt6Location_FOUND AND Qt6QuickWidgets_FOUND)
-    target_compile_definitions(TriageProject PRIVATE HAVE_QT_LOCATION)
-    target_link_libraries(TriageProject PRIVATE Qt6::Location Qt6::QuickWidgets)
-endif()
-
 if(NOT ANDROID)
     # Servidor API REST
     add_executable(triage_api
@@ -85,4 +90,11 @@ if(NOT ANDROID)
         OpenSSL::Crypto
         pthread
     )
+
+    add_executable(test_motores
+        tests/test_motores.cpp
+        ${TRIAJE_MOTORES}
+    )
+    target_include_directories(test_motores PRIVATE include)
+    target_link_libraries(test_motores PRIVATE Designar::Designar)
 endif()

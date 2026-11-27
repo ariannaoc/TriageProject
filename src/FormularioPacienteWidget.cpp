@@ -9,10 +9,13 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QMessageBox>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPixmap>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QStringList>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -40,6 +43,8 @@ FormularioPacienteWidget::FormularioPacienteWidget(QWidget* parent)
     configurarUI();
     aplicarEstilos();
     configurarGps();
+    gestorCentros_.cargarCentros(centrosLocales());
+    actualizarAsignacion();
 }
 
 void FormularioPacienteWidget::cargarCatalogos() {
@@ -143,19 +148,32 @@ void FormularioPacienteWidget::configurarUI() {
     layoutContenido->addWidget(grupoPersonales);
 
     auto* grupoUbicacion = new QGroupBox("Ubicación de la emergencia", this);
-    auto* formUbicacion = new QFormLayout(grupoUbicacion);
+    auto* layoutUbicacion = new QVBoxLayout(grupoUbicacion);
+    layoutUbicacion->setSpacing(8);
+
     txtUbicacion = new QLineEdit(this);
-    txtUbicacion->setPlaceholderText("Ej: Sector Belén, Mérida");
-    btnUbicacion = new QPushButton("Usar mi ubicación GPS", this);
+    txtUbicacion->setPlaceholderText("Referencia textual (opcional): sector, calle o punto de referencia");
+    btnUbicacion = new QPushButton("Detectar mi ubicación actual", this);
     btnUbicacion->setMinimumHeight(36);
     auto* layoutReferencia = new QHBoxLayout();
     layoutReferencia->setSpacing(8);
     layoutReferencia->addWidget(txtUbicacion, 1);
     layoutReferencia->addWidget(btnUbicacion);
-    formUbicacion->addRow("Referencia / dirección:", layoutReferencia);
-    lblUbicacionEstado = new QLabel("Ingresa una referencia o usa el GPS; si no hay datos se usará Mérida centro.", this);
+    layoutUbicacion->addLayout(layoutReferencia);
+
+    mapaSelector = new MapaSelectorWidget(grupoUbicacion);
+    mapaSelector->setMinimumHeight(280);
+    layoutUbicacion->addWidget(mapaSelector, 1);
+
+    lblCoordenadas = new QLabel("Coordenadas seleccionadas: 8.589700, -71.156100", this);
+    lblCoordenadas->setObjectName("coordenadasMapa");
+    lblCoordenadas->setWordWrap(true);
+    layoutUbicacion->addWidget(lblCoordenadas);
+
+    lblUbicacionEstado = new QLabel(
+        "Haga clic en el mapa, arrastre el marcador o busque una dirección para fijar la ubicación.", this);
     lblUbicacionEstado->setWordWrap(true);
-    formUbicacion->addRow(lblUbicacionEstado);
+    layoutUbicacion->addWidget(lblUbicacionEstado);
     layoutContenido->addWidget(grupoUbicacion);
 
     auto* grupoRiesgos = new QGroupBox("Paso 1 - Factores de Riesgo", this);
@@ -190,6 +208,7 @@ void FormularioPacienteWidget::configurarUI() {
         chk->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         checkFactores[id] = chk;
         layoutRiesgos->addWidget(chk);
+        connect(chk, &QCheckBox::toggled, this, [this](bool) { actualizarAsignacion(); });
     }
     layoutContenido->addWidget(grupoRiesgos);
 
@@ -218,22 +237,14 @@ void FormularioPacienteWidget::configurarUI() {
     widgetSintomas->hide();
     layoutContenido->addWidget(grupoClinico);
 
-    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
-    auto* grupoDebug = new QGroupBox("Modo Depuración / Prueba (Temporal - Eliminar al integrar BD)", this);
-    grupoDebug->setObjectName("debugGroup");
-    auto* layoutDebug = new QVBoxLayout(grupoDebug);
-    layoutDebug->setSpacing(8);
-    chkForzarCentroDebug = new QCheckBox(
-        "Forzar centro de destino manualmente (omitir asignación automática)", this);
-    comboCentroDebug = new QComboBox(this);
-    comboCentroDebug->addItem("Sin centros disponibles", -1);
-    comboCentroDebug->setEnabled(false);
-    layoutDebug->addWidget(chkForzarCentroDebug);
-    layoutDebug->addWidget(comboCentroDebug);
-    layoutContenido->addWidget(grupoDebug);
-    connect(chkForzarCentroDebug, &QCheckBox::toggled,
-            this, [this](bool marcado) { comboCentroDebug->setEnabled(marcado); });
-    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
+    auto* grupoAsignacion = new QGroupBox("Centro de Salud Asignado Automáticamente", this);
+    grupoAsignacion->setObjectName("asignacionGroup");
+    auto* layoutAsignacion = new QVBoxLayout(grupoAsignacion);
+    lblAsignacion = new QLabel("Seleccione un área, síntomas y una ubicación para ver la asignación.", this);
+    lblAsignacion->setWordWrap(true);
+    lblAsignacion->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layoutAsignacion->addWidget(lblAsignacion);
+    layoutContenido->addWidget(grupoAsignacion);
 
     lblEstadoFormulario = new QLabel("", this);
     lblEstadoFormulario->setAlignment(Qt::AlignCenter);
@@ -256,9 +267,12 @@ void FormularioPacienteWidget::configurarUI() {
     layoutPrincipal->addWidget(scrollArea);
 
     connect(comboSexo, &QComboBox::currentTextChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
-    connect(spinEdad, &QSpinBox::valueChanged, this, &FormularioPacienteWidget::verificarEmbarazo);
+    connect(spinEdad, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &FormularioPacienteWidget::verificarEmbarazo);
     connect(comboCategoria, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &FormularioPacienteWidget::onCategoriaCambiada);
+    connect(mapaSelector, &MapaSelectorWidget::ubicacionSeleccionada,
+            this, &FormularioPacienteWidget::onUbicacionSeleccionada);
     connect(btnUbicacion, &QPushButton::clicked, this, &FormularioPacienteWidget::detectarUbicacion);
     connect(btnVolver, &QPushButton::clicked, this, &FormularioPacienteWidget::volverAlMain);
     connect(btnEvaluar, &QPushButton::clicked, this, &FormularioPacienteWidget::enviarFormulario);
@@ -266,58 +280,91 @@ void FormularioPacienteWidget::configurarUI() {
 
 void FormularioPacienteWidget::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
-    if (lblFondo) {
-        lblFondo->setGeometry(rect());
-        lblFondo->lower();
-        bool esMovil = width() < 600;
+    if (lblFondo == nullptr) {
+        return;
+    }
 
-      for (auto* f : findChildren<QFormLayout*>()) {
-     f->setRowWrapPolicy(esMovil ? QFormLayout::WrapAllRows : QFormLayout::DontWrapRows);
-}
-    for (auto* c : findChildren<QComboBox*>()) {
-    c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    c->setMinimumWidth(0);
-}
-if (auto* l = layout()) {
-    l->setContentsMargins(esMovil ? 12 : 40, 16, esMovil ? 12 : 40, 16);
-}
+    lblFondo->setGeometry(rect());
+    lblFondo->lower();
+
+    const bool esMovil = width() < 600;
+    for (auto* formulario : findChildren<QFormLayout*>()) {
+        formulario->setRowWrapPolicy(esMovil ? QFormLayout::WrapAllRows : QFormLayout::DontWrapRows);
+    }
+    for (auto* combo : findChildren<QComboBox*>()) {
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        combo->setMinimumWidth(0);
+    }
+    if (auto* distribucion = layout()) {
+        distribucion->setContentsMargins(esMovil ? 12 : 40, 16, esMovil ? 12 : 40, 16);
     }
 }
 
 void FormularioPacienteWidget::configurarGps() {
+#ifdef HAVE_QT_POSITIONING
     fuenteGps = QGeoPositionInfoSource::createDefaultSource(this);
     if (fuenteGps == nullptr) {
-        lblUbicacionEstado->setText("GPS no disponible: ingresa una referencia o se usará Mérida centro.");
+        lblUbicacionEstado->setText("GPS no disponible en este equipo; al detectar se usará la ubicación por IP y podrá ajustarla en el mapa.");
         return;
     }
+
+    temporizadorGps = new QTimer(this);
+    temporizadorGps->setSingleShot(true);
+    connect(temporizadorGps, &QTimer::timeout, this, &FormularioPacienteWidget::fallbackUbicacionPorIp);
 
     connect(fuenteGps, &QGeoPositionInfoSource::positionUpdated,
             this, &FormularioPacienteWidget::onPosicionActualizada);
     connect(fuenteGps, &QGeoPositionInfoSource::errorOccurred, this,
             [this](QGeoPositionInfoSource::Error) {
-                if (!ubicacionResuelta) {
-                    lblUbicacionEstado->setText("GPS sin señal: ingresa una referencia o se usará Mérida centro.");
+                if (!esperandoGps) {
+                    return;
                 }
+                esperandoGps = false;
+                temporizadorGps->stop();
+                fuenteGps->stopUpdates();
+                fallbackUbicacionPorIp();
             });
-    fuenteGps->setUpdateInterval(10000);
-    fuenteGps->startUpdates();
+    fuenteGps->setUpdateInterval(2000);
+#else
+    lblUbicacionEstado->setText("GPS no disponible en esta compilación; al detectar se usará la ubicación por IP y podrá ajustarla en el mapa.");
+#endif
 }
 
 void FormularioPacienteWidget::setApiClient(ApiClient* client) {
-    if (api == client) {
-        return;
-    }
     api = client;
-    if (api) {
-        connect(api, &ApiClient::geocodificado, this, &FormularioPacienteWidget::onGeocodificado);
-        connect(api, &ApiClient::failed, this, &FormularioPacienteWidget::onErrorGeocodificacion);
-    }
 }
 
 void FormularioPacienteWidget::setCentros(const QVector<CentroInfo>& centros) {
     std::vector<CentroSalud> cargados;
-    cargados.reserve(static_cast<std::size_t>(centros.size()));
-    for (const CentroInfo& info : centros) {
+    if (centros.isEmpty()) {
+        cargados = centrosLocales();
+    } else {
+        cargados.reserve(static_cast<std::size_t>(centros.size()));
+        for (const CentroInfo& info : centros) {
+            CentroSalud centro;
+            centro.id = info.centerId;
+            centro.nombre = info.name.toStdString();
+            centro.nivel_complejidad = info.nivelComplejidad;
+            centro.capacidad_total = info.capacidadTotal;
+            centro.capacidad_disponible = info.capacidadDisponible;
+            centro.cola_actual = info.colaActual;
+            centro.latitud = info.latitude;
+            centro.longitud = info.longitude;
+            cargados.push_back(centro);
+        }
+    }
+    gestorCentros_.cargarCentros(cargados);
+    actualizarAsignacion();
+}
+
+std::vector<CentroSalud> FormularioPacienteWidget::centrosLocales() const {
+    const QJsonObject catalogo = leerCatalogo(":/resources/data/centros.json");
+    std::vector<CentroSalud> resultado;
+    for (const QJsonValue& entrada : catalogo.value("centers").toArray()) {
+        const CentroInfo info = CentroInfo::fromJson(entrada.toObject());
+        if (info.centerId <= 0 || qFuzzyIsNull(info.latitude) || qFuzzyIsNull(info.longitude)) {
+            continue;
+        }
         CentroSalud centro;
         centro.id = info.centerId;
         centro.nombre = info.name.toStdString();
@@ -327,28 +374,9 @@ void FormularioPacienteWidget::setCentros(const QVector<CentroInfo>& centros) {
         centro.cola_actual = info.colaActual;
         centro.latitud = info.latitude;
         centro.longitud = info.longitude;
-        cargados.push_back(centro);
+        resultado.push_back(centro);
     }
-    gestorCentros_.cargarCentros(cargados);
-
-    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
-    const int seleccionAnterior = comboCentroDebug->currentData().toInt();
-    comboCentroDebug->clear();
-    if (centros.isEmpty()) {
-        comboCentroDebug->addItem("Sin centros disponibles", -1);
-    }
-    for (const CentroInfo& info : centros) {
-        comboCentroDebug->addItem(
-            QString("%1 (ID %2, camas: %3)")
-                .arg(info.name)
-                .arg(info.centerId)
-                .arg(info.capacidadDisponible),
-            info.centerId);
-    }
-    const int indiceAnterior = comboCentroDebug->findData(seleccionAnterior);
-    if (indiceAnterior >= 0) {
-        comboCentroDebug->setCurrentIndex(indiceAnterior);
-    }
+    return resultado;
 }
 
 void FormularioPacienteWidget::setEnviando(bool cargando) {
@@ -387,6 +415,8 @@ void FormularioPacienteWidget::verificarEmbarazo() {
             chk->setChecked(false);
         }
     }
+
+    actualizarAsignacion();
 }
 
 void FormularioPacienteWidget::reconstruirSintomas() {
@@ -401,10 +431,6 @@ void FormularioPacienteWidget::reconstruirSintomas() {
 }
 
 void FormularioPacienteWidget::onCategoriaCambiada(int indice) {
-    if (categoriaActual >= 0) {
-        seleccionPorCategoria[categoriaActual].clear();
-    }
-
     const int id = comboCategoria->itemData(indice).toInt();
     categoriaActual = (indice > 0 && id > 0) ? id : -1;
     reconstruirSintomas();
@@ -413,6 +439,7 @@ void FormularioPacienteWidget::onCategoriaCambiada(int indice) {
     if (categoriaActual < 0) {
         lblGuiaSintomas->show();
         widgetSintomas->hide();
+        actualizarAsignacion();
         return;
     }
 
@@ -430,80 +457,197 @@ void FormularioPacienteWidget::onCategoriaCambiada(int indice) {
         checkSintomas[opcion.id] = chk;
         const int idOpcion = opcion.id;
         connect(chk, &QCheckBox::toggled, this, [this, idOpcion](bool marcado) {
-            auto& ids = seleccionPorCategoria[categoriaActual];
-            if (marcado) {
-                if (std::find(ids.begin(), ids.end(), idOpcion) == ids.end()) {
-                    ids.push_back(idOpcion);
-                }
-            } else {
-                ids.erase(std::remove(ids.begin(), ids.end(), idOpcion), ids.end());
-            }
+            (void)marcado;
+            actualizarAsignacion();
         });
     }
+
+    actualizarAsignacion();
 }
 
 void FormularioPacienteWidget::detectarUbicacion() {
-    if (fuenteGps == nullptr) {
-        lblUbicacionEstado->setText("GPS no disponible: ingresa una referencia o se usará Mérida centro.");
+    if (esperandoGps) {
         return;
     }
-    lblUbicacionEstado->setText("Buscando señal GPS…");
-    fuenteGps->requestUpdate(8000);
+
+#ifdef HAVE_QT_POSITIONING
+    if (fuenteGps == nullptr || temporizadorGps == nullptr) {
+        fallbackUbicacionPorIp();
+        return;
+    }
+
+    esperandoGps = true;
+    lblUbicacionEstado->setText("Buscando señal GPS (máximo 2 segundos)…");
+    temporizadorGps->start(2000);
+    fuenteGps->requestUpdate(2000);
+#else
+    fallbackUbicacionPorIp();
+#endif
 }
 
+#ifdef HAVE_QT_POSITIONING
 void FormularioPacienteWidget::onPosicionActualizada(const QGeoPositionInfo& info) {
+    if (!esperandoGps) {
+        return;
+    }
+
     const QGeoCoordinate coord = info.coordinate();
     if (!coord.isValid()) {
         return;
     }
-    latPaciente = coord.latitude();
-    lngPaciente = coord.longitude();
-    ubicacionResuelta = true;
-    lblUbicacionEstado->setText(QString("Ubicación GPS obtenida: %1, %2")
-                                    .arg(latPaciente, 0, 'f', 6)
-                                    .arg(lngPaciente, 0, 'f', 6));
-}
 
-void FormularioPacienteWidget::onGeocodificado(double latitud, double longitud) {
-    esperandoGeocodificacion = false;
-    latPaciente = latitud;
-    lngPaciente = longitud;
-    ubicacionResuelta = true;
-    lblUbicacionEstado->setText(QString("Ubicación resuelta: %1, %2")
-                                    .arg(latPaciente, 0, 'f', 6)
-                                    .arg(lngPaciente, 0, 'f', 6));
-    enviarFormulario();
-}
+    esperandoGps = false;
+    temporizadorGps->stop();
+    fuenteGps->stopUpdates();
 
-void FormularioPacienteWidget::onErrorGeocodificacion(const QString& operacion, const QString& mensaje) {
-    if (operacion != "geocode" || !esperandoGeocodificacion) {
+    if (qFuzzyIsNull(coord.latitude()) && qFuzzyIsNull(coord.longitude())) {
+        fallbackUbicacionPorIp();
         return;
     }
-    (void)mensaje;
-    esperandoGeocodificacion = false;
-    ubicacionResuelta = true;
-    lblUbicacionEstado->setText("No se pudo geocodificar la referencia; se usa Mérida centro.");
-    enviarFormulario();
+
+    mapaSelector->setUbicacion(coord.latitude(), coord.longitude());
+    lblUbicacionEstado->setText(QString("Ubicación GPS obtenida: %1, %2. Ajuste el pin si es necesario.")
+                                    .arg(latPaciente, 0, 'f', 6)
+                                    .arg(lngPaciente, 0, 'f', 6));
+}
+#endif
+
+void FormularioPacienteWidget::fallbackUbicacionPorIp() {
+    esperandoGps = false;
+    lblUbicacionEstado->setText("GPS sin señal: estimando ubicación por IP…");
+
+    QNetworkRequest solicitud(
+        QUrl(QStringLiteral("http://ip-api.com/json/?fields=status,lat,lon,city")));
+    solicitud.setRawHeader("Accept", "application/json");
+    solicitud.setRawHeader("User-Agent", "TriageProject/1.0");
+
+    auto centrarEnMerida = [this](const QString& motivo) {
+        mapaSelector->setUbicacion(8.5897, -71.1561);
+        lblUbicacionEstado->setText(
+            motivo + " Se centró Mérida (8.5897, -71.1561); ajuste el pin con un clic.");
+    };
+
+    QNetworkReply* respuesta = redUbicacion.get(solicitud);
+    QTimer::singleShot(6000, respuesta, [respuesta]() { respuesta->abort(); });
+    connect(respuesta, &QNetworkReply::finished, this, [this, respuesta, centrarEnMerida]() {
+        respuesta->deleteLater();
+        if (respuesta->error() != QNetworkReply::NoError) {
+            centrarEnMerida("No se pudo detectar la ubicación por IP.");
+            return;
+        }
+
+        const QJsonObject datos = QJsonDocument::fromJson(respuesta->readAll()).object();
+        if (datos.value("status").toString() != QStringLiteral("success")) {
+            centrarEnMerida("Ubicación por IP no disponible.");
+            return;
+        }
+
+        const double lat = datos.value("lat").toDouble(latPaciente);
+        const double lng = datos.value("lon").toDouble(lngPaciente);
+        if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0 ||
+            qFuzzyIsNull(lat) || qFuzzyIsNull(lng)) {
+            centrarEnMerida("Ubicación por IP inválida.");
+            return;
+        }
+
+        if (MotorEnrutamiento::distanciaKm(8.5897, -71.1561, lat, lng) > 80.0) {
+            centrarEnMerida("La IP está fuera del área de Mérida.");
+            return;
+        }
+
+        mapaSelector->setUbicacion(lat, lng);
+        const QString ciudad = datos.value("city").toString();
+        lblUbicacionEstado->setText(QString("Ubicación aproximada por IP%1: %2, %3. Ajuste el pin con precisión.")
+                                        .arg(ciudad.isEmpty() ? QString() : QString(" (%1)").arg(ciudad))
+                                        .arg(latPaciente, 0, 'f', 6)
+                                        .arg(lngPaciente, 0, 'f', 6));
+    });
 }
 
-bool FormularioPacienteWidget::resolveUbicacion() {
-    if (ubicacionResuelta) {
-        return true;
+void FormularioPacienteWidget::onUbicacionSeleccionada(double latitud, double longitud) {
+    if (qFuzzyIsNull(latitud)) {
+        latitud = 8.5897;
+        longitud = -71.1561;
+    }
+    latPaciente = latitud;
+    lngPaciente = longitud;
+
+    if (esperandoGps) {
+        esperandoGps = false;
+#ifdef HAVE_QT_POSITIONING
+        if (temporizadorGps != nullptr) {
+            temporizadorGps->stop();
+        }
+        if (fuenteGps != nullptr) {
+            fuenteGps->stopUpdates();
+        }
+#endif
     }
 
-    const QString referencia = txtUbicacion->text().trimmed();
-    if (!referencia.isEmpty() && api != nullptr && !esperandoGeocodificacion) {
-        esperandoGeocodificacion = true;
-        lblUbicacionEstado->setText("Resolviendo la dirección ingresada…");
-        api->geocodeAddress(referencia);
+    lblCoordenadas->setText(QString("Coordenadas seleccionadas: %1, %2")
+                                .arg(latitud, 0, 'f', 6)
+                                .arg(longitud, 0, 'f', 6));
+    lblUbicacionEstado->setText(QString("Ubicación seleccionada: %1, %2")
+                                    .arg(latitud, 0, 'f', 6)
+                                    .arg(longitud, 0, 'f', 6));
+    actualizarAsignacion();
+}
+
+bool FormularioPacienteWidget::calcularTriajeYCentro(ResultadoTriaje& triaje,
+                                                     ResultadoEnrutamiento& ruta) const {
+    if (categoriaActual < 0 || checkSintomas.empty()) {
         return false;
     }
 
-    latPaciente = 8.5839;
-    lngPaciente = -71.1578;
-    ubicacionResuelta = true;
-    lblUbicacionEstado->setText("Ubicación no resuelta: se usa Mérida centro como referencia.");
+    std::map<int, std::vector<int>> seleccion;
+    for (const auto& [id, chk] : checkSintomas) {
+        if (chk->isChecked()) {
+            seleccion[categoriaActual].push_back(id);
+        }
+    }
+    if (seleccion.empty()) {
+        return false;
+    }
+
+    std::vector<std::string> factoresActivos;
+    for (const auto& [id, chk] : checkFactores) {
+        if (chk->isChecked()) {
+            factoresActivos.push_back(id.toStdString());
+        }
+    }
+
+    const char sexo = comboSexo->currentIndex() == 1 ? 'F' : 'M';
+    triaje = motorTriaje_->evaluar(seleccion, spinEdad->value(), sexo, factoresActivos);
+    if (triaje.sin_sintomas) {
+        return false;
+    }
+
+    ruta = motorEnrutamiento_.recomendar(triaje, latPaciente, lngPaciente, gestorCentros_);
     return true;
+}
+
+void FormularioPacienteWidget::actualizarAsignacion() {
+    ResultadoTriaje triaje;
+    ResultadoEnrutamiento ruta;
+    if (!calcularTriajeYCentro(triaje, ruta)) {
+        lblAsignacion->setText("Seleccione un área, síntomas y una ubicación para ver la asignación.");
+        return;
+    }
+
+    const QString nivel = QString::fromStdString(to_string(triaje.nivel_final));
+    if (ruta.sin_centro_disponible) {
+        lblAsignacion->setText(QString("Nivel de triaje: %1\nSin centro disponible para este nivel y ubicación.")
+                                   .arg(nivel));
+        return;
+    }
+
+    const double distancia = MotorEnrutamiento::distanciaKm(
+        latPaciente, lngPaciente,
+        ruta.centro_recomendado.latitud, ruta.centro_recomendado.longitud);
+    lblAsignacion->setText(QString("Centro: %1\nDistancia estimada: %2 km\nNivel de triaje: %3")
+                               .arg(QString::fromStdString(ruta.centro_recomendado.nombre))
+                               .arg(distancia, 0, 'f', 1)
+                               .arg(nivel));
 }
 
 bool FormularioPacienteWidget::allowAmbulancia(NivelTriaje nivel) const {
@@ -533,30 +677,37 @@ void FormularioPacienteWidget::enviarFormulario() {
         return;
     }
 
-    if (categoriaActual < 0 || checkSintomas.empty()) {
+    ResultadoTriaje resTriaje;
+    ResultadoEnrutamiento resRuta;
+    if (!calcularTriajeYCentro(resTriaje, resRuta)) {
         QMessageBox::warning(this, "Datos incompletos",
                              "Seleccione un área principal y al menos un síntoma de esa rama.");
         return;
     }
 
-    std::vector<int> idsSintomas;
-    for (const auto& [id, chk] : checkSintomas) {
-        if (chk->isChecked()) {
-            idsSintomas.push_back(id);
-        }
-    }
-    seleccionPorCategoria.clear();
-    if (!idsSintomas.empty()) {
-        seleccionPorCategoria[categoriaActual] = idsSintomas;
-    }
-    if (!bosqueTriaje_.tieneSintomasSeleccionados(seleccionPorCategoria)) {
-        QMessageBox::warning(this, "Sin síntomas",
-                             "Marque al menos un síntoma del área seleccionada para evaluar el triaje.");
+    if (resRuta.sin_centro_disponible) {
+        QMessageBox::warning(this, "Sin centro disponible",
+            QString("No hay un centro de salud apto para el nivel de triaje %1. "
+                    "Coordenadas usadas: lat=%2, lng=%3. "
+                    "Ajuste la ubicación en el mapa o revise los datos de los centros.")
+                .arg(QString::fromStdString(to_string(resTriaje.nivel_final)))
+                .arg(latPaciente, 0, 'f', 6)
+                .arg(lngPaciente, 0, 'f', 6));
         return;
     }
 
-    if (!resolveUbicacion()) {
-        return;
+    std::vector<int> idsSintomas;
+    QStringList etiquetasSintomas;
+    for (const auto& [id, chk] : checkSintomas) {
+        if (!chk->isChecked()) {
+            continue;
+        }
+        idsSintomas.push_back(id);
+        auto it = std::find_if(opcionesCategoriaActual.begin(), opcionesCategoriaActual.end(),
+                               [id](const OpcionSintoma& opcion) { return opcion.id == id; });
+        if (it != opcionesCategoriaActual.end()) {
+            etiquetasSintomas.append(QString::fromStdString(it->etiqueta));
+        }
     }
 
     std::vector<std::string> idsFactoresActivos;
@@ -566,57 +717,17 @@ void FormularioPacienteWidget::enviarFormulario() {
         }
     }
 
-    const char sexo = comboSexo->currentIndex() == 1 ? 'F' : 'M';
-    const ResultadoTriaje resTriaje = motorTriaje_->evaluar(
-        seleccionPorCategoria, edad, sexo, idsFactoresActivos);
-    if (resTriaje.sin_sintomas) {
-        QMessageBox::warning(this, "Sin síntomas", "No hay síntomas válidos para evaluar.");
-        return;
-    }
-
-    const ResultadoEnrutamiento resRuta = motorEnrutamiento_.recomendar(
-        resTriaje, latPaciente, lngPaciente, gestorCentros_);
-
-    int centroAsignado = resRuta.centro_recomendado.id;
-    QString nombreCentro = QString::fromStdString(resRuta.centro_recomendado.nombre);
-    double scoreRuta = resRuta.score;
-
-    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
-    const bool forzarCentroDebug = chkForzarCentroDebug->isChecked();
-    if (!forzarCentroDebug && resRuta.sin_centro_disponible) {
-        QMessageBox::warning(this, "Sin centro disponible",
-            QString("No hay un centro de salud apto para el nivel de triaje %1. "
-                    "Coordenadas usadas: lat=%2, lng=%3. "
-                    "Revise la ubicación o los datos geográficos de los centros.")
-                .arg(QString::fromStdString(to_string(resTriaje.nivel_final)))
-                .arg(latPaciente, 0, 'f', 6)
-                .arg(lngPaciente, 0, 'f', 6));
-        return;
-    }
-    if (forzarCentroDebug) {
-        centroAsignado = comboCentroDebug->currentData().toInt();
-        if (centroAsignado <= 0) {
-            QMessageBox::warning(this, "Centro de prueba inválido",
-                                 "Seleccione un centro válido en el modo depuración.");
-            return;
-        }
-        nombreCentro = comboCentroDebug->currentText();
-    }
-    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
-
     const int nivel = static_cast<int>(resTriaje.nivel_final);
     const int puntaje = resTriaje.puntuacion_categoria_ganadora +
                         resTriaje.puntuacion_factores_riesgo;
+    const double distancia = MotorEnrutamiento::distanciaKm(
+        latPaciente, lngPaciente,
+        resRuta.centro_recomendado.latitud, resRuta.centro_recomendado.longitud);
+    const char sexo = comboSexo->currentIndex() == 1 ? 'F' : 'M';
 
     QJsonArray sintomasJson;
-    QStringList etiquetasSintomas;
     for (int id : idsSintomas) {
         sintomasJson.append(id);
-        auto it = std::find_if(opcionesCategoriaActual.begin(), opcionesCategoriaActual.end(),
-                               [id](const OpcionSintoma& opcion) { return opcion.id == id; });
-        if (it != opcionesCategoriaActual.end()) {
-            etiquetasSintomas.append(QString::fromStdString(it->etiqueta));
-        }
     }
     QJsonArray factoresJson;
     for (const std::string& id : idsFactoresActivos) {
@@ -624,9 +735,10 @@ void FormularioPacienteWidget::enviarFormulario() {
     }
 
     QJsonObject datos;
-    datos["center_id"] = centroAsignado;
-    datos["center_name"] = nombreCentro;
-    datos["route_score"] = scoreRuta;
+    datos["center_id"] = resRuta.centro_recomendado.id;
+    datos["center_name"] = QString::fromStdString(resRuta.centro_recomendado.nombre);
+    datos["route_score"] = resRuta.score;
+    datos["distancia_estimada_km"] = distancia;
     datos["first_name"] = nombre;
     datos["last_name"] = apellido;
     datos["age"] = edad;
@@ -638,16 +750,20 @@ void FormularioPacienteWidget::enviarFormulario() {
     datos["symptom_ids"] = sintomasJson;
     datos["risk_factor_ids"] = factoresJson;
     datos["ambulance_requested"] = allowAmbulancia(resTriaje.nivel_final);
-    datos["location"] = txtUbicacion->text().trimmed();
+    const QString referencia = txtUbicacion->text().trimmed();
+    datos["location"] = referencia.isEmpty() ? QStringLiteral("Ubicación seleccionada en el mapa") : referencia;
     datos["latitude"] = latPaciente;
     datos["longitude"] = lngPaciente;
+    datos["latitud"] = latPaciente;
+    datos["longitud"] = lngPaciente;
     datos["source"] = "SYSTEM";
     datos["created_at"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
-    ultimoEstado = QString("Triaje %1 (%2 pts) · Centro asignado: %3")
+    ultimoEstado = QString("Triaje %1 (%2 pts) · Centro asignado: %3 · %4 km")
                        .arg(QString::fromStdString(to_string(resTriaje.nivel_final)))
                        .arg(puntaje)
-                       .arg(nombreCentro);
+                       .arg(QString::fromStdString(resRuta.centro_recomendado.nombre))
+                       .arg(distancia, 0, 'f', 1);
     lblEstadoFormulario->setText(ultimoEstado);
     setEnviando(true);
     emit pacienteListo(datos);
@@ -677,6 +793,7 @@ void FormularioPacienteWidget::aplicarEstilos() {
         "    border-radius: 4px;"
         "}"
         "QLabel { background-color: transparent; color: #2D3748; font-size: 14px; }"
+        "QLabel#coordenadasMapa { color: #0E9F91; font-weight: bold; }"
         "QLineEdit, QSpinBox, QComboBox {"
         "    background-color: #FFFFFF;"
         "    border: 1.5px solid #CBD5E0;"
@@ -703,13 +820,11 @@ void FormularioPacienteWidget::aplicarEstilos() {
         "    border: 1px dashed #B2DFDB;"
         "    border-radius: 8px;"
         "}"
-        "QGroupBox#debugGroup {"
-        "    border: 1px solid #F6AD55;"
-        "    background-color: rgba(255, 250, 240, 235);"
+        "QGroupBox#asignacionGroup {"
+        "    border: 1px solid #99F6E4;"
+        "    background-color: rgba(230, 250, 248, 235);"
         "}"
-        "QGroupBox#debugGroup::title { color: #C05621; }"
-        "QGroupBox#debugGroup QLabel { color: #744210; }"
-        "QGroupBox#debugGroup QCheckBox { color: #744210; }"
+        "QGroupBox#asignacionGroup::title { color: #0E9F91; }"
     );
 
     btnEvaluar->setCursor(Qt::PointingHandCursor);

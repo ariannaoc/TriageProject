@@ -10,7 +10,7 @@
          <file>resources/csalud.png</file>
          <file>resources/fondo.png</file>
 
-        <file>resources/mapa_ubicacion.qml</file>
+        <file>resources/data/centros.json</file>
         <file>resources/data/symptoms.json</file>
         <file>resources/data/triage_levels.json</file>
         <file>resources/data/risk_factors.json</file>

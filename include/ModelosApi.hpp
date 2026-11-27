@@ -27,6 +27,10 @@ struct CentroInfo {
     QString location;
     double latitude = 0.0;
     double longitude = 0.0;
+    int nivelComplejidad = 1;
+    int capacidadTotal = 0;
+    int capacidadDisponible = 0;
+    int colaActual = 0;
 
     static CentroInfo fromJson(const QJsonObject& json);
 };

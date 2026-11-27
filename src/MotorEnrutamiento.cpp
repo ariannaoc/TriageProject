@@ -7,16 +7,15 @@ namespace
 {
 constexpr double kPi         = 3.14159265358979323846;
 constexpr double kKmPorGrado = 111.0;
+}  // namespace
 
-/// Distancia euclidiana local (km); misma aproximación que GestorCentros.
-double distanciaKm(double lat1, double lng1, double lat2, double lng2)
+double MotorEnrutamiento::distanciaKm(double lat1, double lng1, double lat2, double lng2)
 {
     const double rad  = lat1 * kPi / 180.0;
     const double dlat = (lat2 - lat1) * kKmPorGrado;
     const double dlng = (lng2 - lng1) * kKmPorGrado * std::cos(rad);
     return std::sqrt(dlat * dlat + dlng * dlng);
 }
-}  // namespace
 
 int MotorEnrutamiento::complejidadMinimaParaNivel(NivelTriaje nivel)
 {

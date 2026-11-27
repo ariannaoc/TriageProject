@@ -2,16 +2,21 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QGeoPositionInfo>
-#include <QGeoPositionInfoSource>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QNetworkAccessManager>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QSpinBox>
+#include <QTimer>
 #include <QWidget>
+
+#ifdef HAVE_QT_POSITIONING
+#include <QGeoPositionInfo>
+#include <QGeoPositionInfoSource>
+#endif
 
 #include <map>
 #include <memory>
@@ -21,6 +26,7 @@
 #include "ApiClient.hpp"
 #include "BosqueTriaje.hpp"
 #include "GestorCentros.hpp"
+#include "MapaSelectorWidget.hpp"
 #include "ModelosApi.hpp"
 #include "MotorEnrutamiento.hpp"
 #include "MotorTriaje.hpp"
@@ -48,9 +54,11 @@ private slots:
     void verificarEmbarazo();
     void onCategoriaCambiada(int indice);
     void detectarUbicacion();
+#ifdef HAVE_QT_POSITIONING
     void onPosicionActualizada(const QGeoPositionInfo& info);
-    void onGeocodificado(double latitud, double longitud);
-    void onErrorGeocodificacion(const QString& operacion, const QString& mensaje);
+#endif
+    void onUbicacionSeleccionada(double latitud, double longitud);
+    void actualizarAsignacion();
     void enviarFormulario();
 
 private:
@@ -59,7 +67,9 @@ private:
     void configurarGps();
     void aplicarEstilos();
     void reconstruirSintomas();
-    bool resolveUbicacion();
+    void fallbackUbicacionPorIp();
+    std::vector<CentroSalud> centrosLocales() const;
+    bool calcularTriajeYCentro(ResultadoTriaje& triaje, ResultadoEnrutamiento& ruta) const;
     bool allowAmbulancia(NivelTriaje nivel) const;
 
     QLabel* lblFondo = nullptr;
@@ -72,23 +82,28 @@ private:
     QLineEdit* txtUbicacion;
     QPushButton* btnUbicacion;
     QLabel* lblUbicacionEstado;
+    QLabel* lblCoordenadas;
+    MapaSelectorWidget* mapaSelector;
 
     QComboBox* comboCategoria;
     QWidget* widgetSintomas;
     QVBoxLayout* layoutSintomas;
     QLabel* lblGuiaSintomas;
 
+    QLabel* lblAsignacion;
     QLabel* lblEstadoFormulario;
-
-    // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
-    QCheckBox* chkForzarCentroDebug;
-    QComboBox* comboCentroDebug;
 
     QPushButton* btnEvaluar;
     QPushButton* btnVolver;
 
     ApiClient* api = nullptr;
+    QNetworkAccessManager redUbicacion;
+
+#ifdef HAVE_QT_POSITIONING
     QGeoPositionInfoSource* fuenteGps = nullptr;
+    QTimer* temporizadorGps = nullptr;
+#endif
+    bool esperandoGps = false;
 
     std::vector<CategoriaTriaje> catalogoCategorias;
     std::vector<FactorRiesgo> factoresTriaje;
@@ -97,17 +112,14 @@ private:
     std::map<int, QCheckBox*> checkSintomas;
     std::vector<OpcionSintoma> opcionesCategoriaActual;
     int categoriaActual = -1;
-    std::map<int, std::vector<int>> seleccionPorCategoria;
 
     BosqueTriaje bosqueTriaje_;
     std::unique_ptr<MotorTriaje> motorTriaje_;
     GestorCentros gestorCentros_;
     MotorEnrutamiento motorEnrutamiento_;
 
-    double latPaciente = 8.5839;
-    double lngPaciente = -71.1578;
-    bool ubicacionResuelta = false;
-    bool esperandoGeocodificacion = false;
+    double latPaciente = 8.5897;
+    double lngPaciente = -71.1561;
     bool enviando = false;
     QString ultimoEstado;
 };

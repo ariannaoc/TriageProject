@@ -1,0 +1,88 @@
+{
+  "centers": [
+    {
+      "center_id": 1,
+      "name": "IAHULA - Instituto Autónomo Hospital Universitario de Los Andes",
+      "type": "Hospital Tipo IV",
+      "max_level": 1,
+      "capacity": 150,
+      "location": "Av. 16 de Septiembre, Mérida",
+      "latitude": 8.5892,
+      "longitude": -71.1578,
+      "nivel_complejidad": 4,
+      "capacidad_total": 150,
+      "capacidad_disponible": 150,
+      "cola_actual": 12
+    },
+    {
+      "center_id": 2,
+      "name": "Hospital Sor Juana Inés de la Cruz (Maternidad)",
+      "type": "Hospital Tipo III",
+      "max_level": 2,
+      "capacity": 60,
+      "location": "Av. Urdaneta, Mérida",
+      "latitude": 8.5925,
+      "longitude": -71.1460,
+      "nivel_complejidad": 3,
+      "capacidad_total": 60,
+      "capacidad_disponible": 60,
+      "cola_actual": 6
+    },
+    {
+      "center_id": 3,
+      "name": "Ambulatorio Urbano Tipo III El Llano",
+      "type": "Ambulatorio Urbano Tipo III",
+      "max_level": 3,
+      "capacity": 25,
+      "location": "Urb. Las Tapias, Sector El Llano, Mérida",
+      "latitude": 8.5880,
+      "longitude": -71.1610,
+      "nivel_complejidad": 2,
+      "capacidad_total": 25,
+      "capacidad_disponible": 25,
+      "cola_actual": 0
+    },
+    {
+      "center_id": 4,
+      "name": "Ambulatorio Urbano Tipo I San Jacinto (PUMM)",
+      "type": "Ambulatorio Urbano Tipo I",
+      "max_level": 4,
+      "capacity": 5,
+      "location": "Plaza Bolívar de San Jacinto, Mérida",
+      "latitude": 8.5745,
+      "longitude": -71.1610,
+      "nivel_complejidad": 1,
+      "capacidad_total": 5,
+      "capacidad_disponible": 5,
+      "cola_actual": 0
+    },
+    {
+      "center_id": 5,
+      "name": "Ambulatorio Urbano Tipo I Arquidiócesano",
+      "type": "Ambulatorio Urbano Tipo I",
+      "max_level": 4,
+      "capacity": 5,
+      "location": "Calle 17 entre Av. 2 y 3, Mérida",
+      "latitude": 8.6015,
+      "longitude": -71.1410,
+      "nivel_complejidad": 1,
+      "capacidad_total": 5,
+      "capacidad_disponible": 5,
+      "cola_actual": 0
+    },
+    {
+      "center_id": 6,
+      "name": "Ambulatorio Urbano Tipo I La Carabobo",
+      "type": "Ambulatorio Urbano Tipo I",
+      "max_level": 4,
+      "capacity": 5,
+      "location": "Barrio Carabobo, Mérida",
+      "latitude": 8.5695,
+      "longitude": -71.1480,
+      "nivel_complejidad": 1,
+      "capacidad_total": 5,
+      "capacidad_disponible": 5,
+      "cola_actual": 0
+    }
+  ]
+}

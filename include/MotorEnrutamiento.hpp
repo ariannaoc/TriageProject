@@ -16,6 +16,9 @@ public:
     /// (adaptación propia basada en la normativa MPPS). Ver .cpp.
     static int complejidadMinimaParaNivel(NivelTriaje nivel);
 
+    /// Distancia euclidiana local en km, con la misma aproximación del motor.
+    static double distanciaKm(double lat1, double lng1, double lat2, double lng2);
+
     /// Recomienda un centro y devuelve el ranking completo.
     ///
     /// - Si `triaje.sin_sintomas` es true, cortocircuita sin consultar el
