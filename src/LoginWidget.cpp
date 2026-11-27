@@ -218,6 +218,18 @@ void LoginWidget::resizeEvent(QResizeEvent* event) {
         lblFondo->setGeometry(this->rect());
         lblFondo->lower();
     }
+    bool esMovil = width() < 600;
+
+for (auto* f : findChildren<QFormLayout*>()) {
+    f->setRowWrapPolicy(esMovil ? QFormLayout::WrapAllRows : QFormLayout::DontWrapRows);
+}
+for (auto* c : findChildren<QComboBox*>()) {
+    c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    c->setMinimumWidth(0);
+}
+if (auto* l = layout()) {
+    l->setContentsMargins(esMovil ? 12 : 40, 16, esMovil ? 12 : 40, 16);
+}
 }
 
 void LoginWidget::procesarLogin() {
