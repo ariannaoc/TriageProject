@@ -71,12 +71,15 @@ public:
     /// que ResultadoTriaje.categoria_ganadora tenga un nombre legible en la UI.
     std::string nombreCategoria(int idCategoria) const;
 
+<<<<<<< HEAD
     /// Ids de las categorías construidas, en orden ascendente.
     std::vector<int> categorias() const;
 
     /// Opciones hoja de la rama "Sí" de una categoría (para poblar la UI).
     std::vector<OpcionSintoma> opcionesCategoria(int idCategoria) const;
 
+=======
+>>>>>>> main
 private:
     std::map<int, std::unique_ptr<Nodo>> arboles_;
     std::map<int, std::string> nombres_;
