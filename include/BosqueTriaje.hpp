@@ -71,6 +71,7 @@ public:
     /// que ResultadoTriaje.categoria_ganadora tenga un nombre legible en la UI.
     std::string nombreCategoria(int idCategoria) const;
 
+
 private:
     std::map<int, std::unique_ptr<Nodo>> arboles_;
     std::map<int, std::string> nombres_;

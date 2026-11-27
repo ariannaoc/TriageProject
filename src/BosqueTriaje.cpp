@@ -19,7 +19,7 @@ int sumarSeleccionadas(const Nodo& nodo, const std::set<int>& ids)
     }
     return total;
 }
-}  // namespace
+
 
 void BosqueTriaje::construirDesdeCategorias(const std::vector<CategoriaTriaje>& categorias)
 {

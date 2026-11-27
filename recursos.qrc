@@ -4,5 +4,15 @@
         <file>resources/Estetoscopio.png</file>
         <file>resources/Heart_signovital.png</file>
         <file>resources/signos_vitales.png</file>
+        <file>resources/usuario.png</file>
+        <file>resources/centro_salud.png</file>
+        <file>resources/vistappal.png</file>
+         <file>resources/csalud.png</file>
+         <file>resources/fondo.png</file>
+
+        <file>resources/mapa_ubicacion.qml</file>
+        <file>resources/data/symptoms.json</file>
+        <file>resources/data/triage_levels.json</file>
+        <file>resources/data/risk_factors.json</file>
     </qresource>
 </RCC>

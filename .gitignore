@@ -1,17 +1,9 @@
-# Bases de datos locales binarias
-*.db
-*.sqlite
-*.sqlite3
-
-
-# Compilación CMake / Qt
 build/
-build_android/
-*.o
-*.out
+cmake-build-*/
 *.user
-compile_commands.json
+*.user.*
+*.o
+*.obj
+*.exe
+*.out
 
-#Notas locales
-*Notes.MDtest_motores_demo
-demo_output.txt
