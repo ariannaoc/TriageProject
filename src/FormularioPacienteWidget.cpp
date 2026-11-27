@@ -3,12 +3,15 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFormLayout>
+#include <QGraphicsOpacityEffect>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QStringList>
 #include <QVBoxLayout>
 
@@ -88,21 +91,34 @@ void FormularioPacienteWidget::cargarCatalogos() {
 }
 
 void FormularioPacienteWidget::configurarUI() {
+    setObjectName("FormularioPacienteWidget");
+
+    lblFondo = new QLabel(this);
+    lblFondo->setPixmap(QPixmap(":/resources/fondo.png"));
+    lblFondo->setScaledContents(true);
+    auto* efectoOpacidad = new QGraphicsOpacityEffect(this);
+    efectoOpacidad->setOpacity(0.30);
+    lblFondo->setGraphicsEffect(efectoOpacidad);
+    lblFondo->lower();
+
     auto* layoutPrincipal = new QVBoxLayout(this);
     layoutPrincipal->setContentsMargins(0, 0, 0, 0);
 
     auto* scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+    scrollArea->viewport()->setStyleSheet("background: transparent;");
 
     auto* widgetContenido = new QWidget();
+    widgetContenido->setStyleSheet("background: transparent;");
     auto* layoutContenido = new QVBoxLayout(widgetContenido);
     layoutContenido->setContentsMargins(40, 20, 40, 20);
     layoutContenido->setSpacing(15);
 
     auto* lblTitulo = new QLabel("Registro de Emergencia y Triaje", this);
     lblTitulo->setAlignment(Qt::AlignCenter);
-    lblTitulo->setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff;");
+    lblTitulo->setStyleSheet("font-size: 24px; font-weight: bold; color: #0E9F91; margin-bottom: 6px; background: transparent;");
     layoutContenido->addWidget(lblTitulo);
 
     auto* grupoAfectado = new QGroupBox("¿Quién ha tenido la emergencia?", this);
@@ -131,8 +147,10 @@ void FormularioPacienteWidget::configurarUI() {
     txtUbicacion = new QLineEdit(this);
     txtUbicacion->setPlaceholderText("Ej: Sector Belén, Mérida");
     btnUbicacion = new QPushButton("Usar mi ubicación GPS", this);
+    btnUbicacion->setMinimumHeight(36);
     auto* layoutReferencia = new QHBoxLayout();
-    layoutReferencia->addWidget(txtUbicacion);
+    layoutReferencia->setSpacing(8);
+    layoutReferencia->addWidget(txtUbicacion, 1);
     layoutReferencia->addWidget(btnUbicacion);
     formUbicacion->addRow("Referencia / dirección:", layoutReferencia);
     lblUbicacionEstado = new QLabel("Ingresa una referencia o usa el GPS; si no hay datos se usará Mérida centro.", this);
@@ -142,12 +160,15 @@ void FormularioPacienteWidget::configurarUI() {
 
     auto* grupoRiesgos = new QGroupBox("Paso 1 - Factores de Riesgo", this);
     auto* layoutRiesgos = new QVBoxLayout(grupoRiesgos);
+    layoutRiesgos->setSpacing(6);
     for (const auto& factor : factoresTriaje) {
         if (factor.esReglaEdad) {
-            layoutRiesgos->addWidget(new QLabel(
+            auto* lblRegla = new QLabel(
                 QString::fromStdString(factor.nombre) +
                     QString(" (+%1 pts, se aplica automáticamente)").arg(factor.puntos),
-                this));
+                this);
+            lblRegla->setWordWrap(true);
+            layoutRiesgos->addWidget(lblRegla);
         }
     }
     const QJsonObject riesgosDoc = leerCatalogo(":/resources/data/risk_factors.json");
@@ -166,6 +187,7 @@ void FormularioPacienteWidget::configurarUI() {
         chk->setProperty("sexoRequerido", restricciones.value("sex").toString());
         chk->setProperty("edadMin", restricciones.value("min_age").toInt());
         chk->setProperty("edadMax", restricciones.value("max_age").toInt());
+        chk->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         checkFactores[id] = chk;
         layoutRiesgos->addWidget(chk);
     }
@@ -173,6 +195,7 @@ void FormularioPacienteWidget::configurarUI() {
 
     auto* grupoClinico = new QGroupBox("Paso 2 - Área y Síntomas", this);
     auto* layoutClinico = new QVBoxLayout(grupoClinico);
+    layoutClinico->setSpacing(8);
     layoutClinico->addWidget(new QLabel("Área principal de la emergencia:", this));
     comboCategoria = new QComboBox(this);
     comboCategoria->addItem("Seleccione un área o categoría...", -1);
@@ -181,12 +204,16 @@ void FormularioPacienteWidget::configurarUI() {
     }
     layoutClinico->addWidget(comboCategoria);
 
-    lblGuiaSintomas = new QLabel("Seleccione un área o categoría para ver los síntomas relacionados", this);
-    lblGuiaSintomas->setStyleSheet("color: #bbbbbb; font-style: italic;");
+    lblGuiaSintomas = new QLabel("Seleccione un área o categoría para ver los síntomas relacionados.", this);
+    lblGuiaSintomas->setWordWrap(true);
+    lblGuiaSintomas->setStyleSheet("color: #4A5568; font-style: italic; background: transparent;");
     layoutClinico->addWidget(lblGuiaSintomas);
 
     widgetSintomas = new QWidget(this);
+    widgetSintomas->setObjectName("contenedorSintomas");
     layoutSintomas = new QVBoxLayout(widgetSintomas);
+    layoutSintomas->setContentsMargins(10, 10, 10, 10);
+    layoutSintomas->setSpacing(6);
     layoutClinico->addWidget(widgetSintomas);
     widgetSintomas->hide();
     layoutContenido->addWidget(grupoClinico);
@@ -195,6 +222,7 @@ void FormularioPacienteWidget::configurarUI() {
     auto* grupoDebug = new QGroupBox("Modo Depuración / Prueba (Temporal - Eliminar al integrar BD)", this);
     grupoDebug->setObjectName("debugGroup");
     auto* layoutDebug = new QVBoxLayout(grupoDebug);
+    layoutDebug->setSpacing(8);
     chkForzarCentroDebug = new QCheckBox(
         "Forzar centro de destino manualmente (omitir asignación automática)", this);
     comboCentroDebug = new QComboBox(this);
@@ -209,11 +237,12 @@ void FormularioPacienteWidget::configurarUI() {
 
     lblEstadoFormulario = new QLabel("", this);
     lblEstadoFormulario->setAlignment(Qt::AlignCenter);
-    lblEstadoFormulario->setStyleSheet("color: #90caf9; font-size: 13px;");
     lblEstadoFormulario->setWordWrap(true);
+    lblEstadoFormulario->setStyleSheet("color: #0E9F91; font-weight: bold; font-size: 13px; background: transparent;");
     layoutContenido->addWidget(lblEstadoFormulario);
 
     auto* layoutBotones = new QHBoxLayout();
+    layoutBotones->setSpacing(10);
     btnVolver = new QPushButton("⬅ Volver a Inicio", this);
     btnVolver->setMinimumHeight(45);
     btnEvaluar = new QPushButton("Enviar a la cola del centro", this);
@@ -233,6 +262,14 @@ void FormularioPacienteWidget::configurarUI() {
     connect(btnUbicacion, &QPushButton::clicked, this, &FormularioPacienteWidget::detectarUbicacion);
     connect(btnVolver, &QPushButton::clicked, this, &FormularioPacienteWidget::volverAlMain);
     connect(btnEvaluar, &QPushButton::clicked, this, &FormularioPacienteWidget::enviarFormulario);
+}
+
+void FormularioPacienteWidget::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    if (lblFondo) {
+        lblFondo->setGeometry(rect());
+        lblFondo->lower();
+    }
 }
 
 void FormularioPacienteWidget::configurarGps() {
@@ -255,9 +292,14 @@ void FormularioPacienteWidget::configurarGps() {
 }
 
 void FormularioPacienteWidget::setApiClient(ApiClient* client) {
+    if (api == client) {
+        return;
+    }
     api = client;
-    connect(api, &ApiClient::geocodificado, this, &FormularioPacienteWidget::onGeocodificado);
-    connect(api, &ApiClient::failed, this, &FormularioPacienteWidget::onErrorGeocodificacion);
+    if (api) {
+        connect(api, &ApiClient::geocodificado, this, &FormularioPacienteWidget::onGeocodificado);
+        connect(api, &ApiClient::failed, this, &FormularioPacienteWidget::onErrorGeocodificacion);
+    }
 }
 
 void FormularioPacienteWidget::setCentros(const QVector<CentroInfo>& centros) {
@@ -371,6 +413,7 @@ void FormularioPacienteWidget::onCategoriaCambiada(int indice) {
             QString::fromStdString(opcion.etiqueta) +
                 QString(" (+%1 pts)").arg(opcion.base_points),
             widgetSintomas);
+        chk->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         layoutSintomas->addWidget(chk);
         checkSintomas[opcion.id] = chk;
         const int idOpcion = opcion.id;
@@ -599,20 +642,82 @@ void FormularioPacienteWidget::enviarFormulario() {
 }
 
 void FormularioPacienteWidget::aplicarEstilos() {
-    this->setStyleSheet(
-        "QWidget { background-color: #2b2b2b; color: #ffffff; font-size: 14px; }"
-        "QGroupBox { font-weight: bold; border: 1px solid #555555; border-radius: 6px; margin-top: 12px; }"
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; color: #90caf9; }"
-        // TODO(DEBUG): Eliminar sección temporal de selección manual de centro
-        "QGroupBox#debugGroup { border: 1px dotted #ffb300; background-color: #3a3326; }"
-        "QGroupBox#debugGroup::title { color: #ffb300; }"
-        "QLineEdit, QSpinBox, QComboBox { background-color: #3c3c3c; border: 1px solid #555; border-radius: 4px; padding: 6px; color: white; }"
-        "QCheckBox { padding: 4px; }"
-        "QCheckBox::indicator { width: 18px; height: 18px; }"
-        "QCheckBox:disabled { color: #777777; }");
+    setAttribute(Qt::WA_StyledBackground, true);
 
-    btnEvaluar->setStyleSheet("QPushButton { background-color: #d32f2f; color: white; font-weight: bold; border-radius: 6px; }"
-                              "QPushButton:hover { background-color: #b71c1c; }");
-    btnVolver->setStyleSheet("QPushButton { background-color: #555555; color: white; font-weight: bold; border-radius: 6px; }"
-                             "QPushButton:hover { background-color: #444444; }");
+    setStyleSheet(
+        "QWidget#FormularioPacienteWidget { background-color: #F8FCFC; }"
+        "QGroupBox {"
+        "    background-color: rgba(255, 255, 255, 232);"
+        "    font-weight: bold;"
+        "    font-size: 14px;"
+        "    border: 1px solid #E2E8F0;"
+        "    border-radius: 10px;"
+        "    margin-top: 16px;"
+        "    padding: 14px 12px 12px 12px;"
+        "}"
+        "QGroupBox::title {"
+        "    subcontrol-origin: margin;"
+        "    subcontrol-position: top left;"
+        "    left: 12px;"
+        "    padding: 2px 8px;"
+        "    color: #0E9F91;"
+        "    background-color: rgba(248, 252, 252, 240);"
+        "    border-radius: 4px;"
+        "}"
+        "QLabel { background-color: transparent; color: #2D3748; font-size: 14px; }"
+        "QLineEdit, QSpinBox, QComboBox {"
+        "    background-color: #FFFFFF;"
+        "    border: 1.5px solid #CBD5E0;"
+        "    border-radius: 6px;"
+        "    padding: 6px 10px;"
+        "    color: #1A202C;"
+        "    font-size: 14px;"
+        "}"
+        "QLineEdit:focus, QSpinBox:focus, QComboBox:focus {"
+        "    border: 1.5px solid #12C6B5;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "    background-color: #FFFFFF;"
+        "    color: #1A202C;"
+        "    selection-background-color: #E6FAF8;"
+        "    selection-color: #0E9F91;"
+        "}"
+        "QCheckBox { background-color: transparent; color: #2D3748; font-size: 14px; padding: 4px; spacing: 8px; }"
+        "QCheckBox::indicator { width: 18px; height: 18px; border-radius: 4px; border: 1.5px solid #CBD5E0; background-color: #FFFFFF; }"
+        "QCheckBox::indicator:checked { background-color: #12C6B5; border-color: #12C6B5; }"
+        "QCheckBox:disabled { color: #A0AEC0; }"
+        "QWidget#contenedorSintomas {"
+        "    background-color: rgba(248, 252, 252, 220);"
+        "    border: 1px dashed #B2DFDB;"
+        "    border-radius: 8px;"
+        "}"
+        "QGroupBox#debugGroup {"
+        "    border: 1px solid #F6AD55;"
+        "    background-color: rgba(255, 250, 240, 235);"
+        "}"
+        "QGroupBox#debugGroup::title { color: #C05621; }"
+        "QGroupBox#debugGroup QLabel { color: #744210; }"
+        "QGroupBox#debugGroup QCheckBox { color: #744210; }"
+    );
+
+    btnEvaluar->setCursor(Qt::PointingHandCursor);
+    btnEvaluar->setStyleSheet(
+        "QPushButton { background-color: #12C6B5; color: #FFFFFF; font-weight: bold; font-size: 14px; border-radius: 8px; padding: 10px 18px; border: none; }"
+        "QPushButton:hover { background-color: #0EA899; }"
+        "QPushButton:disabled { background-color: #A0AEC0; }"
+    );
+
+    btnVolver->setCursor(Qt::PointingHandCursor);
+    btnVolver->setStyleSheet(
+        "QPushButton { background-color: #FFFFFF; color: #2D3748; font-weight: bold; font-size: 14px; border: 2px solid #12C6B5; border-radius: 8px; padding: 10px 18px; }"
+        "QPushButton:hover { background-color: #E6FAF8; }"
+    );
+
+    if (btnUbicacion) {
+        btnUbicacion->setCursor(Qt::PointingHandCursor);
+        btnUbicacion->setStyleSheet(
+            "QPushButton { background-color: #FFFFFF; color: #0E9F91; font-weight: bold; font-size: 13px; border: 1.5px solid #12C6B5; border-radius: 6px; padding: 6px 12px; }"
+            "QPushButton:hover { background-color: #E6FAF8; }"
+        );
+    }
 }

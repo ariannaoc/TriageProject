@@ -1,9 +1,9 @@
 -- CENTERS
-CREATE TABLE IF NOT EXISTS centers (
+CREATE TABLE centers (
     center_id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
-    max_level INTEGER NOT NULL CHECK(max_level BETWEEN 1 AND 5),
+    max_level INTEGER NOT NULL CHECK(max_level BETWEEN 1 AND 4),
     capacity INTEGER NOT NULL CHECK(capacity >= 0),
     location TEXT NOT NULL,
     latitude REAL NOT NULL,
@@ -14,31 +14,41 @@ CREATE TABLE IF NOT EXISTS centers (
 );
 
 -- USERS
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    center_id INTEGER NOT NULL,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    FOREIGN KEY (center_id) REFERENCES centers (center_id) ON DELETE CASCADE
+    role TEXT NOT NULL DEFAULT 'ADMIN',
+    center_id INTEGER,
+    FOREIGN KEY (center_id) REFERENCES centers(center_id) ON DELETE SET NULL
 );
 
 -- PATIENTS
-CREATE TABLE IF NOT EXISTS patients (
+CREATE TABLE patients (
     cedula TEXT PRIMARY KEY,
-    center_id INTEGER NOT NULL,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
-    age INTEGER NOT NULL,
-    triage_level INTEGER NULL,
-    triage_score INTEGER NULL,
-    source TEXT NOT NULL CHECK(source IN ('SYSTEM', 'MANUAL')),
-    status TEXT NOT NULL CHECK(status IN ('ADMITTED', 'DISCHARGED')),
-    admission_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    discharge_date DATETIME NULL,
-    symptoms TEXT NULL,
-    FOREIGN KEY (center_id) REFERENCES centers (center_id)
+    age INTEGER NOT NULL CHECK(age > 0),
+    sex TEXT NOT NULL CHECK(sex IN ('M','F'))
 );
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_patients_center_status ON patients(center_id, status);
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+-- TRIAGE RECORDS
+CREATE TABLE triage_records (
+    triage_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cedula TEXT NOT NULL,
+    center_id INTEGER NOT NULL,
+    triage_level INTEGER NOT NULL CHECK(triage_level BETWEEN 1 AND 5),
+    triage_score INTEGER NOT NULL CHECK(triage_score BETWEEN 0 AND 100),
+    symptoms TEXT NOT NULL,
+    ambulance_requested BOOLEAN NOT NULL DEFAULT 0,
+    status TEXT NOT NULL CHECK(status IN ('ADMITTED','DISCHARGED','REFERRED')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cedula) REFERENCES patients(cedula) ON DELETE CASCADE,
+    FOREIGN KEY (center_id) REFERENCES centers(center_id) ON DELETE CASCADE
+);
+
+-- INDEXES
+CREATE INDEX idx_patients_cedula ON patients(cedula);
+CREATE INDEX idx_triage_cedula ON triage_records(cedula);
+CREATE INDEX idx_triage_center ON triage_records(center_id);
+CREATE INDEX idx_triage_level ON triage_records(triage_level);

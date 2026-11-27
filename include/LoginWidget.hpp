@@ -1,6 +1,7 @@
 #pragma once
 #include <QWidget>
 #include <QString>
+#include <QResizeEvent>
 #include "ModelosCentro.hpp"
 #include "ModelosApi.hpp"
 
@@ -15,18 +16,19 @@ class QTabWidget;
 class LoginWidget : public QWidget {
     Q_OBJECT
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
     ApiClient* api;
     AVLTree<CredencialCentro>* repositorioCentros;
     bool esperandoLogin;
 
-    // Controles de Iniciar Sesión
     QLineEdit* inputLoginUser;
     QLineEdit* inputLoginPass;
     QPushButton* btnEntrar;
     QLabel* lblEstadoLogin;
 
-    // Controles de Registro de Centro
     QLineEdit* inputRegNombreCentro;
     QComboBox* comboRegTipoCentro;
     QSpinBox* spinRegCapacidad;
@@ -34,6 +36,7 @@ private:
     QLineEdit* inputRegPass;
 
     QTabWidget* pestanasAuth;
+    QLabel* lblFondo = nullptr;
 
     void configurarUI();
     void setLoginLoading(bool cargando);

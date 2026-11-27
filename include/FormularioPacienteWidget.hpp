@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QSpinBox>
 #include <QWidget>
 
@@ -40,6 +41,9 @@ signals:
     void volverAlMain();
     void pacienteListo(const QJsonObject& datos);
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private slots:
     void verificarEmbarazo();
     void onCategoriaCambiada(int indice);
@@ -50,6 +54,16 @@ private slots:
     void enviarFormulario();
 
 private:
+    void cargarCatalogos();
+    void configurarUI();
+    void configurarGps();
+    void aplicarEstilos();
+    void reconstruirSintomas();
+    bool resolveUbicacion();
+    bool allowAmbulancia(NivelTriaje nivel) const;
+
+    QLabel* lblFondo = nullptr;
+
     QComboBox* comboAfectado;
     QComboBox* comboSexo;
     QSpinBox* spinEdad;
@@ -96,12 +110,4 @@ private:
     bool esperandoGeocodificacion = false;
     bool enviando = false;
     QString ultimoEstado;
-
-    void cargarCatalogos();
-    void configurarUI();
-    void configurarGps();
-    void aplicarEstilos();
-    void reconstruirSintomas();
-    bool resolveUbicacion();
-    bool allowAmbulancia(NivelTriaje nivel) const;
 };

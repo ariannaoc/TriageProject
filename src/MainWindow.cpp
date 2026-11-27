@@ -16,8 +16,8 @@
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     centerIdActual(-1), operacionDashboardEnCurso(false) {
-    setWindowTitle("Sistema de Triaje Automático y Derivación Distribuida - Mérida");
-    resize(850, 580);
+    setWindowTitle("TriageMe - Sistema de Triage para Centros de Salud");
+    resize(900, 450);
 
     api = new ApiClient(this);
     precargarCentrosMerida();

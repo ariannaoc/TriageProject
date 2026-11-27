@@ -2,12 +2,15 @@
 #include "ApiClient.hpp"
 #include <QComboBox>
 #include <QFormLayout>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -29,25 +32,33 @@ LoginWidget::LoginWidget(ApiClient* api, AVLTree<CredencialCentro>* repo, QWidge
 }
 
 void LoginWidget::configurarUI() {
+    setObjectName("LoginWidget");
+    setAttribute(Qt::WA_StyledBackground, true);
+
+    lblFondo = new QLabel(this);
+    lblFondo->setPixmap(QPixmap(":/resources/fondo.png"));
+    lblFondo->setScaledContents(true);
+    auto* efectoOpacidad = new QGraphicsOpacityEffect(this);
+    efectoOpacidad->setOpacity(0.30);
+    lblFondo->setGraphicsEffect(efectoOpacidad);
+    lblFondo->lower();
+
     auto* layoutPrincipal = new QVBoxLayout(this);
     layoutPrincipal->setContentsMargins(80, 40, 80, 40);
     layoutPrincipal->setSpacing(15);
 
-    // Encabezado
     auto* titulo = new QLabel("Módulo Centro de Salud — Autenticación", this);
     titulo->setAlignment(Qt::AlignCenter);
-    titulo->setStyleSheet("font-size: 22px; font-weight: bold; color: #64B5F6;");
+    titulo->setStyleSheet("font-size: 24px; font-weight: bold; color: #0E9F91; background: transparent;");
 
     auto* subtitulo = new QLabel("Acceso exclusivo para personal autorizado de la Red Asistencial de Mérida", this);
     subtitulo->setAlignment(Qt::AlignCenter);
-    subtitulo->setStyleSheet("font-size: 13px; color: #ffffff;");
+    subtitulo->setStyleSheet("font-size: 13px; color: #4A5568; background: transparent; margin-bottom: 6px;");
 
     pestanasAuth = new QTabWidget(this);
 
-    
-    // Pestaña 1: Iniciar sesión (LOGIN)
-    
     auto* tabLogin = new QWidget(this);
+    tabLogin->setStyleSheet("background: transparent;");
     auto* layoutLogin = new QVBoxLayout(tabLogin);
     auto* formLogin = new QFormLayout();
     formLogin->setSpacing(12);
@@ -63,14 +74,18 @@ void LoginWidget::configurarUI() {
 
     btnEntrar = new QPushButton("Iniciar Sesión", this);
     btnEntrar->setMinimumHeight(42);
-    btnEntrar->setStyleSheet("background-color: #1976d2; color: white; font-weight: bold; border-radius: 6px;");
+    btnEntrar->setCursor(Qt::PointingHandCursor);
+    btnEntrar->setStyleSheet(
+        "QPushButton { background-color: #12C6B5; color: #FFFFFF; font-weight: bold; font-size: 14px; border-radius: 8px; border: none; }"
+        "QPushButton:hover { background-color: #0EA899; }"
+    );
 
     auto* notaPrueba = new QLabel("Usuario API de prueba: <b>iahula_admin</b> | Contraseña: <b>admin123</b>", this);
-    notaPrueba->setStyleSheet("color: #ffffff; font-size: 12px;");
+    notaPrueba->setStyleSheet("color: #4A5568; font-size: 12px; background: transparent;");
 
     lblEstadoLogin = new QLabel("", this);
     lblEstadoLogin->setAlignment(Qt::AlignCenter);
-    lblEstadoLogin->setStyleSheet("color: #90caf9; font-size: 12px;");
+    lblEstadoLogin->setStyleSheet("color: #0E9F91; font-weight: bold; font-size: 12px; background: transparent;");
 
     layoutLogin->addSpacing(15);
     layoutLogin->addLayout(formLogin);
@@ -80,10 +95,8 @@ void LoginWidget::configurarUI() {
     layoutLogin->addWidget(notaPrueba);
     layoutLogin->addStretch();
 
-
-    // PESTAÑA 2: REGISTRO DE CENTRO DE SALUD
-   
     auto* tabRegistro = new QWidget(this);
+    tabRegistro->setStyleSheet("background: transparent;");
     auto* layoutReg = new QVBoxLayout(tabRegistro);
     auto* formReg = new QFormLayout();
     formReg->setSpacing(10);
@@ -115,7 +128,11 @@ void LoginWidget::configurarUI() {
 
     auto* btnRegistrar = new QPushButton("Registrar Centro de Salud", this);
     btnRegistrar->setMinimumHeight(42);
-    btnRegistrar->setStyleSheet("background-color: #2e7d32; color: white; font-weight: bold; border-radius: 6px;");
+    btnRegistrar->setCursor(Qt::PointingHandCursor);
+    btnRegistrar->setStyleSheet(
+        "QPushButton { background-color: #0E9F91; color: #FFFFFF; font-weight: bold; font-size: 14px; border-radius: 8px; border: none; }"
+        "QPushButton:hover { background-color: #0B7F74; }"
+    );
 
     layoutReg->addLayout(formReg);
     layoutReg->addSpacing(10);
@@ -126,32 +143,71 @@ void LoginWidget::configurarUI() {
     pestanasAuth->addTab(tabRegistro, QIcon(":/resources/centro_salud.png"), "Registrar Centro");
     pestanasAuth->setIconSize(QSize(20, 20));
 
-   
-
-    // Botón para volver a la ventana Main
     auto* btnVolver = new QPushButton("⬅ Volver al Menú Principal (Main)", this);
-    btnVolver->setMinimumHeight(36);
+    btnVolver->setMinimumHeight(40);
+    btnVolver->setCursor(Qt::PointingHandCursor);
+    btnVolver->setStyleSheet(
+        "QPushButton { background-color: #FFFFFF; color: #2D3748; font-weight: bold; font-size: 14px; border: 2px solid #12C6B5; border-radius: 8px; }"
+        "QPushButton:hover { background-color: #E6FAF8; }"
+    );
 
     layoutPrincipal->addWidget(titulo);
     layoutPrincipal->addWidget(subtitulo);
     layoutPrincipal->addWidget(pestanasAuth);
     layoutPrincipal->addWidget(btnVolver);
 
-    // Conexiones de eventos
     connect(btnEntrar, &QPushButton::clicked, this, &LoginWidget::procesarLogin);
     connect(btnRegistrar, &QPushButton::clicked, this, &LoginWidget::procesarRegistro);
     connect(btnVolver, &QPushButton::clicked, this, &LoginWidget::volverAlMain);
 
-        setObjectName("LoginWidget");
-    setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(
-        "QWidget#LoginWidget { background-color: #313131; }"
-        "QLabel { color: #ffffff; background: transparent; }"
-        "QTabWidget::pane { background-color: #3a3a3a; border: 1px solid #555; }"
-        "QTabBar::tab { background: #3a3a3a; color: #ffffff; padding: 8px 16px; }"
-        "QTabBar::tab:selected { background: #1976d2; font-weight: bold; }"
-        "QLineEdit { background-color: #ffffff; color: #1b263b; border: 1px solid #aaa; border-radius: 4px; padding: 4px; }"
+        "QWidget#LoginWidget { background-color: #F8FCFC; }"
+        "QLabel { color: #2D3748; background: transparent; font-size: 14px; }"
+        "QTabWidget::pane {"
+        "    background-color: rgba(255, 255, 255, 232);"
+        "    border: 1px solid #E2E8F0;"
+        "    border-radius: 10px;"
+        "    padding: 14px;"
+        "}"
+        "QTabBar::tab {"
+        "    background-color: #E8F9F7;"
+        "    color: #4A5568;"
+        "    padding: 10px 22px;"
+        "    border-top-left-radius: 8px;"
+        "    border-top-right-radius: 8px;"
+        "    margin-right: 4px;"
+        "    font-weight: bold;"
+        "}"
+        "QTabBar::tab:selected {"
+        "    background-color: #12C6B5;"
+        "    color: #FFFFFF;"
+        "}"
+        "QLineEdit, QComboBox, QSpinBox {"
+        "    background-color: #FFFFFF;"
+        "    color: #1A202C;"
+        "    border: 1.5px solid #CBD5E0;"
+        "    border-radius: 6px;"
+        "    padding: 6px 10px;"
+        "    font-size: 14px;"
+        "}"
+        "QLineEdit:focus, QComboBox:focus, QSpinBox:focus {"
+        "    border: 1.5px solid #12C6B5;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "    background-color: #FFFFFF;"
+        "    color: #1A202C;"
+        "    selection-background-color: #E6FAF8;"
+        "    selection-color: #0E9F91;"
+        "}"
     );
+}
+
+void LoginWidget::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    if (lblFondo) {
+        lblFondo->setGeometry(rect());
+        lblFondo->lower();
+    }
 }
 
 void LoginWidget::procesarLogin() {
@@ -215,7 +271,6 @@ void LoginWidget::procesarRegistro() {
         capacidad
     };
 
-    // Verificar en DeSiGNAR si el usuario ya existe
     if (repositorioCentros->search(nuevaCredencial) != nullptr) {
         QMessageBox::warning(this, "Usuario existente", "Ese nombre de usuario ya está registrado en el sistema.");
         return;
@@ -229,5 +284,5 @@ void LoginWidget::procesarRegistro() {
     inputRegNombreCentro->clear();
     inputRegUser->clear();
     inputRegPass->clear();
-    pestanasAuth->setCurrentIndex(0); // Cambiar a la pestaña de Login
+    pestanasAuth->setCurrentIndex(0);
 }
